@@ -163,7 +163,7 @@ public sealed partial class MirageController : IDisposable
             await processSession.StartAsync(target, executable, showWindow: prefs.ProcessWindow, locale: locale);
             if (operation != generation || quitting) { await processSession.StopAsync(); return; }
             started = DateTimeOffset.UtcNow; active = target; RecordRecent(target);
-            Status("Processo em execução", "Confira o jogo em Jogos registrados e veja se o contador da missão avança no Discord.", true);
+            Status("Processo em execução", "Confira a atividade exibida em Jogos registrados no Discord.", true);
             string title = "Mirage · " + L("processo", "process", "proceso") + " · " + target.Name; SetTrayText(title[..Math.Min(63, title.Length)]);
         } catch (Exception ex) {
             if (operation != generation) return;

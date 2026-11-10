@@ -27,6 +27,8 @@ O idioma pode ser alterado no canto superior da janela. Português do Brasil, in
 
 O reconhecimento é feito pelo aplicativo do Discord para Windows e pode levar alguns segundos. O Mirage inicia apenas um processo auxiliar local; nenhum jogo é aberto.
 
+O Mirage é um projeto independente. Use seus recursos de acordo com os termos dos serviços integrados.
+
 ## Recursos
 
 - Catálogo pesquisável de jogos reconhecidos pelo Discord.
