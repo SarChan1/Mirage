@@ -71,6 +71,12 @@ Object.assign(en, {
 Object.assign(es, {
   "Reinserir saves de um backup": "Restaurar partidas desde una copia", "Analise um ZIP ou uma pasta antes de devolver os arquivos aos jogos.": "Analiza un ZIP o una carpeta antes de devolver los archivos a los juegos.", "Selecionar ZIP": "Seleccionar ZIP", "Depois de formatar ou reinstalar um jogo, abra-o e crie um save uma vez.": "Después de formatear o reinstalar un juego, ábrelo y crea una partida una vez.", "Alguns jogos geram uma nova pasta, um novo perfil ou outro identificador. O Mirage prioriza a pasta atual e avisa quando só encontra o caminho antigo.": "Algunos juegos crean una carpeta, perfil o identificador nuevo. Mirage prioriza la carpeta actual y avisa si solo encuentra la ruta antigua.", "prontos": "listos", "aguardando": "en espera", "conflitos": "conflictos", "Este é um backup antigo. Caminhos atuais serão usados quando reconhecidos; o restante ficará guardado para revisão.": "Esta es una copia antigua. Se usarán las rutas actuales reconocidas; el resto quedará guardado para revisión.", "Mesclar com segurança": "Combinar de forma segura", "Mantém saves atuais e separa arquivos conflitantes para revisão.": "Conserva las partidas actuales y separa los archivos en conflicto para revisarlos.", "Substituir com ponto de restauração": "Sustituir con punto de restauración", "Guarda os saves atuais em um ZIP antes de substituí-los.": "Guarda las partidas actuales en un ZIP antes de sustituirlas.", "Restaurar saves": "Restaurar partidas", "Restauração concluída": "Restauración completada", "inseridos": "restaurados", "conflitos preservados": "conflictos conservados", "aguardando destino": "esperando destino", "Abrir pendentes": "Abrir pendientes", "Abrir ponto de restauração": "Abrir punto de restauración", "O jogo está instalado, mas ainda não criou uma pasta de saves reconhecível.": "El juego está instalado, pero aún no creó una carpeta de partidas reconocible.", "O jogo não está instalado. Os arquivos serão guardados até você instalá-lo e criar um save.": "El juego no está instalado. Los archivos se guardarán hasta que lo instales y crees una partida.", "Já existem saves nesse destino. Você escolherá como tratar os conflitos.": "Ya existen partidas en este destino. Elegirás cómo tratar los conflictos.", "Nenhum arquivo restaurável foi encontrado para este jogo.": "No se encontró ningún archivo restaurable para este juego.", "Destino atual reconhecido e pronto para restauração.": "Destino actual reconocido y listo para restaurar."
 });
+Object.assign(en, {
+  "Rever pendentes": "Review pending", "novo perfil": "new profile", "novos perfis": "new profiles", "Novo perfil detectado. Os saves serão encaixados na pasta atual mais compatível.": "New profile detected. Saves will be fitted into the most compatible current folder.", "Um perfil novo foi detectado e já possui saves. Escolha como tratar os conflitos.": "A new profile was detected and already contains saves. Choose how to handle conflicts.", "Anterior:": "Previous:", "Atual:": "Current:"
+});
+Object.assign(es, {
+  "Rever pendentes": "Revisar pendientes", "novo perfil": "perfil nuevo", "novos perfis": "perfiles nuevos", "Novo perfil detectado. Os saves serão encaixados na pasta atual mais compatível.": "Se detectó un perfil nuevo. Las partidas se insertarán en la carpeta actual más compatible.", "Um perfil novo foi detectado e já possui saves. Escolha como tratar os conflitos.": "Se detectó un perfil nuevo que ya contiene partidas. Elige cómo tratar los conflictos.", "Anterior:": "Anterior:", "Atual:": "Actual:"
+});
 
 const catalogs: Record<Locale, Record<string, string>> = { "pt-BR": {}, en, es };
 const reverse = new Map<string, string>();
@@ -100,6 +106,8 @@ function reverseDynamic(value: string): string | null {
     [/^Añadir (\d+) (?:juego|juegos)$/, m => `Adicionar ${m[1]} ${m[1] === "1" ? "jogo" : "jogos"}`],
     [/^(.+) · (?:starts automatically|inicio automático)$/, m => `${m[1]} · início automático`],
     [/^(?:Source|Base): Ludusavi Manifest · (.+) (?:games|juegos)$/, m => `Base: Ludusavi Manifest · ${m[1]} jogos`],
+    [/^(\d+) (?:new profile|perfil nuevo)$/, m => `${m[1]} novo perfil`],
+    [/^(\d+) (?:new profiles|perfiles nuevos)$/, m => `${m[1]} novos perfis`],
   ];
   for (const [pattern, replace] of rules) { const match = value.match(pattern); if (match) return replace(match); }
   return null;
@@ -131,6 +139,8 @@ function dynamic(source: string, locale: Locale): string | null {
     [/^Desfazer: (.+) · Ctrl Z$/, m => isEn ? `Undo: ${m[1]} · Ctrl Z` : `Deshacer: ${m[1]} · Ctrl Z`],
     [/^(.+) · início automático$/, m => isEn ? `${m[1]} · starts automatically` : `${m[1]} · inicio automático`],
     [/^Base: Ludusavi Manifest · (.+) jogos$/, m => isEn ? `Source: Ludusavi Manifest · ${m[1]} games` : `Base: Ludusavi Manifest · ${m[1]} juegos`],
+    [/^(\d+) novo perfil$/, m => isEn ? `${m[1]} new profile` : `${m[1]} perfil nuevo`],
+    [/^(\d+) novos perfis$/, m => isEn ? `${m[1]} new profiles` : `${m[1]} perfiles nuevos`],
   ];
   for (const [pattern, replace] of rules) { const match = source.match(pattern); if (match) return replace(match); }
   return null;

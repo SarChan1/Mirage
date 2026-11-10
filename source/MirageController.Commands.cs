@@ -33,6 +33,7 @@ public sealed partial class MirageController
     public Task<SaveExportResult> ExportSaveLibraryAsync(string destination, bool zip) => SaveLibrary.ExportAsync(games, destination, zip);
     public string ResolveLastSaveExport() => SaveLibrary.ResolveLastExport();
     public Task<SaveRestoreAnalysis> AnalyzeSaveRestoreAsync(string path) => SaveRestore.AnalyzeAsync(path);
+    public Task<SaveRestoreAnalysis?> AnalyzePendingSaveRestoreAsync() => PreviewOnly ? Task.FromResult<SaveRestoreAnalysis?>(null) : SaveRestore.AnalyzeLatestPendingAsync();
     public async Task<SaveRestoreResult> RestoreSavesAsync(string token, string mode) => lastRestore = await SaveRestore.RestoreAsync(token, mode);
     public string ResolveLastRestorePath(string kind)
     {
@@ -132,6 +133,7 @@ public sealed partial class MirageController
             case "saves.load": { var cached = await LoadSaveLibraryAsync(); if (cached is null) return new { empty = true }; return cached; }
             case "saves.validate": return await ValidateSaveLibraryAsync();
             case "saves.scanInstalled": return await ScanSaveLibraryAsync();
+            case "saves.restore.pending": { var pendingRestore = await AnalyzePendingSaveRestoreAsync(); return pendingRestore is null ? new { empty = true } : pendingRestore; }
             case "saves.restore.apply": return await RestoreSavesAsync(TextArg(args, "token"), TextArg(args, "mode", "merge"));
             case "saves.find": {
                 var game = WebGame(TextArg(args, "gameId"));

@@ -13,7 +13,7 @@ Ao restaurar, o catálogo local e a interface são recriados. Um snapshot pequen
 - Preferências: `%LOCALAPPDATA%\Mirage\preferences.json`, com escrita atômica e confirmação antes de substituir arquivo ilegível.
 - Catálogo: cópia embutida e atualização periódica pelo endpoint público do Discord.
 - Imagens: CDNs do Discord e da Steam, bloqueando outras origens.
-- Saves: busca local limitada por regras derivadas do catálogo MIT do Ludusavi, cache persistente, validação incremental, histórico limitado, separação de instalações e saves órfãos, exportação explícita e restauração com análise de conflitos, área de espera e rollback.
+- Saves: busca local limitada por regras derivadas do catálogo MIT do Ludusavi, cache persistente, validação incremental, histórico limitado, separação de instalações e saves órfãos, exportação explícita e restauração com análise de conflitos, migração de identificadores de perfil, fila persistente de reinserções e rollback.
 - Reconhecimento: processo auxiliar local com nome compatível com o catálogo.
 
 Não há servidor local, telemetria, conta, anúncios ou chaves de API.

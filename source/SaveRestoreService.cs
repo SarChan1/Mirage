@@ -4,18 +4,19 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Mirage;
 
-public sealed record SaveRestoreGame(string GameId, string Name, string Status, string? Target, bool Installed, int Files, long SizeBytes, int Conflicts, string Note);
-public sealed record SaveRestoreAnalysis(string Token, string SourceName, DateTimeOffset? CreatedAt, SaveRestoreGame[] Games, int Files, long SizeBytes, int ReadyGames, int PendingGames, int Conflicts, bool Legacy);
+public sealed record SaveRestoreGame(string GameId, string Name, string Status, string? Target, bool Installed, int Files, long SizeBytes, int Conflicts, string Note, bool ProfileMigration = false, string? PreviousPath = null);
+public sealed record SaveRestoreAnalysis(string Token, string SourceName, DateTimeOffset? CreatedAt, SaveRestoreGame[] Games, int Files, long SizeBytes, int ReadyGames, int PendingGames, int Conflicts, bool Legacy, int ProfileMigrations = 0, bool PendingPackage = false);
 public sealed record SaveRestoreResult(int RestoredFiles, int PreservedConflicts, int PendingFiles, string? RollbackPath, string? PendingPath, SaveRestoreAnalysis Analysis);
 
 public sealed class SaveRestoreService
 {
     private sealed record RestoreFile(string Source, string Relative, long Size);
-    private sealed record RestoreLocation(string BackupPath, string? OriginalPath, string Kind, string? Target, RestoreFile[] Files);
+    private sealed record RestoreLocation(string BackupPath, string? OriginalPath, string Kind, string? Target, RestoreFile[] Files, bool ProfileMigration = false);
     private sealed record RestoreGameState(string GameId, string Name, bool Installed, RestoreLocation[] Locations);
     private sealed record RestoreState(string Token, string Source, bool Zip, DateTimeOffset? CreatedAt, bool Legacy, RestoreGameState[] Games, SaveRestoreAnalysis Analysis);
     private readonly SaveLibraryService library;
@@ -46,23 +47,25 @@ public sealed class SaveRestoreService
             foreach (var sourceLocation in item.Locations.Take(160)) {
                 var files = EnumerateFiles(source, zip, sourceLocation.BackupPath).Take(100_001).ToArray();
                 if (files.Length > 100_000) throw new InvalidDataException("O backup contém arquivos demais para uma restauração segura.");
-                string? target = MatchTarget(sourceLocation, known, usedTargets);
-                if (!installed && known.Length == 0) target = null;
+                var match = MatchTarget(sourceLocation, known, usedTargets, parsed.CreatedAt);
+                string? target = !installed && known.Length == 0 ? null : match.Path;
                 if (target is not null) usedTargets.Add(target);
-                locations.Add(new(sourceLocation.BackupPath, sourceLocation.OriginalPath, sourceLocation.Kind, target, files));
+                locations.Add(new(sourceLocation.BackupPath, sourceLocation.OriginalPath, sourceLocation.Kind, target, files, target is not null && match.ProfileMigration));
             }
             int filesCount = locations.Sum(location => location.Files.Length); long bytes = locations.Sum(location => location.Files.Sum(file => file.Size));
             int conflicts = locations.Sum(CountConflicts);
-            string status = locations.Count == 0 ? "invalid" : locations.All(location => location.Target is not null) ? (conflicts > 0 ? "conflict" : "ready") : "pending";
-            string note = status switch { "pending" => installed ? "O jogo está instalado, mas ainda não criou uma pasta de saves reconhecível." : "O jogo não está instalado. Os arquivos serão guardados até você instalá-lo e criar um save.", "conflict" => "Já existem saves nesse destino. Você escolherá como tratar os conflitos.", "invalid" => "Nenhum arquivo restaurável foi encontrado para este jogo.", _ => "Destino atual reconhecido e pronto para restauração." };
+            bool migration = locations.Any(location => location.ProfileMigration);
+            string status = locations.Count == 0 ? "invalid" : locations.All(location => location.Target is not null) ? (conflicts > 0 ? "conflict" : migration ? "migration" : "ready") : "pending";
+            string note = status switch { "pending" => installed ? "O jogo está instalado, mas ainda não criou uma pasta de saves reconhecível." : "O jogo não está instalado. Os arquivos serão guardados até você instalá-lo e criar um save.", "conflict" when migration => "Um perfil novo foi detectado e já possui saves. Escolha como tratar os conflitos.", "conflict" => "Já existem saves nesse destino. Você escolherá como tratar os conflitos.", "migration" => "Novo perfil detectado. Os saves serão encaixados na pasta atual mais compatível.", "invalid" => "Nenhum arquivo restaurável foi encontrado para este jogo.", _ => "Destino atual reconhecido e pronto para restauração." };
             statesForGames.Add(new(id, item.Name, installed, locations.ToArray()));
-            summaries.Add(new(id, item.Name, status, locations.Select(location => location.Target).FirstOrDefault(target => target is not null), installed, filesCount, bytes, conflicts, note));
+            string? primaryTarget = status == "pending" ? null : locations.FirstOrDefault(location => location.ProfileMigration)?.Target ?? locations.Select(location => location.Target).FirstOrDefault(target => target is not null);
+            summaries.Add(new(id, item.Name, status, primaryTarget, installed, filesCount, bytes, conflicts, note, migration, locations.FirstOrDefault(location => location.ProfileMigration)?.OriginalPath));
             totalFiles += filesCount; totalBytes += bytes; totalConflicts += conflicts;
         }
         if (totalFiles == 0) throw new InvalidDataException("O backup não contém arquivos de save restauráveis.");
         if (totalFiles > 100_000 || totalBytes > 20L * 1024 * 1024 * 1024) throw new InvalidDataException("O conteúdo do backup ultrapassa o limite seguro de restauração.");
         string token = Guid.NewGuid().ToString("N");
-        var analysis = new SaveRestoreAnalysis(token, Path.GetFileName(source.TrimEnd(Path.DirectorySeparatorChar)), parsed.CreatedAt, summaries.ToArray(), totalFiles, totalBytes, summaries.Count(game => game.Status is "ready" or "conflict"), summaries.Count(game => game.Status == "pending"), totalConflicts, parsed.Legacy);
+        var analysis = new SaveRestoreAnalysis(token, Path.GetFileName(source.TrimEnd(Path.DirectorySeparatorChar)), parsed.CreatedAt, summaries.ToArray(), totalFiles, totalBytes, summaries.Count(game => game.Status is "ready" or "migration" or "conflict"), summaries.Count(game => game.Status == "pending"), totalConflicts, parsed.Legacy, summaries.Count(game => game.ProfileMigration), parsed.PendingPackage);
         states.Clear(); states[token] = new(token, source, zip, parsed.CreatedAt, parsed.Legacy, statesForGames.ToArray(), analysis);
         return analysis;
     }
@@ -71,38 +74,83 @@ public sealed class SaveRestoreService
     {
         if (!states.TryGetValue(token, out var state)) throw new ArgumentException("Analise o backup novamente antes de restaurar.");
         if (mode is not ("merge" or "replace")) throw new ArgumentException("Escolha uma forma válida de restauração.");
-        string stamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
-        string pendingRoot = Path.Combine(dataRoot, "Imported Saves", stamp);
+        string stamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss_fff");
+        string pendingRoot = UniqueFolder(Path.Combine(dataRoot, "Imported Saves", stamp));
         string rollbackPath = Path.Combine(dataRoot, "Restore Points", "Mirage-Restore-" + stamp + ".zip");
         int restored = 0, preserved = 0, pending = 0; ZipArchive? rollback = null;
         var rollbackEntries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pendingLocations = new List<(RestoreGameState Game, RestoreLocation Location, string Category)>();
         try {
             using var sourceArchive = state.Zip ? ZipFile.OpenRead(state.Source) : null;
-            foreach (var game in state.Games) foreach (var location in game.Locations) foreach (var file in location.Files) {
-                if (location.Target is null) { await CopyToVault(sourceArchive, state, game, location, file, pendingRoot, "Pending"); pending++; continue; }
-                string target = TargetFile(location, file);
-                if (!SafeRestoreTarget(target)) { await CopyToVault(sourceArchive, state, game, location, file, pendingRoot, "Review"); pending++; continue; }
-                if (File.Exists(target)) {
-                    if (SameLength(target, file.Size) && await SameContentAsync(sourceArchive, state, file, target)) continue;
-                    if (mode == "merge") { await CopyToVault(sourceArchive, state, game, location, file, pendingRoot, "Conflicts"); preserved++; continue; }
-                    Directory.CreateDirectory(Path.GetDirectoryName(rollbackPath)!);
-                    rollback ??= ZipFile.Open(rollbackPath, ZipArchiveMode.Create);
-                    string rollbackEntry = SafePart(game.Name) + "/" + SafePart(Path.GetFileName(location.Target)) + "/" + file.Relative.Replace('\\', '/');
-                    rollback.CreateEntryFromFile(target, UniqueEntry(rollbackEntries, rollbackEntry), CompressionLevel.Optimal);
+            foreach (var game in state.Games) foreach (var location in game.Locations) {
+                string? pendingCategory = null;
+                foreach (var file in location.Files) {
+                    if (location.Target is null) { pendingCategory = "Pending"; await CopyToVault(sourceArchive, state, game, location, file, pendingRoot, pendingCategory); pending++; continue; }
+                    string target = TargetFile(location, file);
+                    if (!SafeRestoreTarget(target)) { pendingCategory = "Review"; await CopyToVault(sourceArchive, state, game, location, file, pendingRoot, pendingCategory); pending++; continue; }
+                    if (File.Exists(target)) {
+                        if (SameLength(target, file.Size) && await SameContentAsync(sourceArchive, state, file, target)) continue;
+                        if (mode == "merge") { await CopyToVault(sourceArchive, state, game, location, file, pendingRoot, "Conflicts"); preserved++; continue; }
+                        Directory.CreateDirectory(Path.GetDirectoryName(rollbackPath)!);
+                        rollback ??= ZipFile.Open(rollbackPath, ZipArchiveMode.Create);
+                        string rollbackEntry = SafePart(game.Name) + "/" + SafePart(Path.GetFileName(location.Target)) + "/" + file.Relative.Replace('\\', '/');
+                        rollback.CreateEntryFromFile(target, UniqueEntry(rollbackEntries, rollbackEntry), CompressionLevel.Optimal);
+                    }
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    await CopySourceAsync(sourceArchive, state, file, target, overwrite: true);
+                    restored++;
                 }
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                await CopySourceAsync(sourceArchive, state, file, target, overwrite: true);
-                restored++;
+                if (pendingCategory is not null) pendingLocations.Add((game, location, pendingCategory));
             }
         } finally { rollback?.Dispose(); }
+        if (pendingLocations.Count > 0) await WritePendingManifestAsync(pendingRoot, pendingLocations);
+        if (IsPendingSource(state.Source)) await File.WriteAllTextAsync(Path.Combine(state.Source, ".completed"), DateTimeOffset.UtcNow.ToString("O"));
         if (!Directory.Exists(pendingRoot)) pendingRoot = "";
         if (!File.Exists(rollbackPath)) rollbackPath = "";
         return new(restored, preserved, pending, rollbackPath.Length > 0 ? rollbackPath : null, pendingRoot.Length > 0 ? pendingRoot : null, state.Analysis);
     }
 
+    public async Task<SaveRestoreAnalysis?> AnalyzeLatestPendingAsync()
+    {
+        string root = Path.Combine(dataRoot, "Imported Saves");
+        if (!Directory.Exists(root)) return null;
+        foreach (string folder in Directory.EnumerateDirectories(root).OrderByDescending(Directory.GetLastWriteTimeUtc).Take(100)) {
+            if (!File.Exists(Path.Combine(folder, "manifest.json")) || File.Exists(Path.Combine(folder, ".completed"))) continue;
+            try { return await AnalyzeAsync(folder); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or JsonException or ArgumentException) { }
+        }
+        return null;
+    }
+
+    private async Task WritePendingManifestAsync(string root, IEnumerable<(RestoreGameState Game, RestoreLocation Location, string Category)> entries)
+    {
+        var games = entries.GroupBy(entry => (entry.Game.GameId, entry.Game.Name)).Select(group => new {
+            gameId = group.Key.GameId,
+            name = group.Key.Name,
+            installed = group.First().Game.Installed,
+            locations = group.Select(entry => {
+                string stored = Path.Combine(entry.Category, SafePart(entry.Game.Name), SafePart(Path.GetFileName(entry.Location.BackupPath)));
+                if (entry.Location.Kind == "file" && entry.Location.Files.Length > 0) stored = Path.Combine(stored, entry.Location.Files[0].Relative);
+                return new { backupPath = stored.Replace('\\', '/'), originalPath = entry.Location.OriginalPath, kind = entry.Location.Kind };
+            }).ToArray()
+        }).ToArray();
+        int files = entries.Sum(entry => entry.Location.Files.Length);
+        long size = entries.Sum(entry => entry.Location.Files.Sum(file => file.Size));
+        var manifest = new { schemaVersion = 2, createdAt = DateTimeOffset.UtcNow, files, sizeBytes = size, pendingRestore = true, games };
+        Directory.CreateDirectory(root);
+        await File.WriteAllTextAsync(Path.Combine(root, "manifest.json"), JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private bool IsPendingSource(string source)
+    {
+        if (!Directory.Exists(source) || !File.Exists(Path.Combine(source, "manifest.json"))) return false;
+        string root = Path.GetFullPath(Path.Combine(dataRoot, "Imported Saves")).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return Path.GetFullPath(source).StartsWith(root, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed record ManifestLocation(string BackupPath, string? OriginalPath, string Kind);
     private sealed record ManifestGame(string? Id, string Name, ManifestLocation[] Locations);
-    private sealed record ParsedManifest(DateTimeOffset? CreatedAt, bool Legacy, ManifestGame[] Games);
+    private sealed record ParsedManifest(DateTimeOffset? CreatedAt, bool Legacy, bool PendingPackage, ManifestGame[] Games);
 
     private static ParsedManifest ReadManifest(string source, bool zip)
     {
@@ -121,6 +169,7 @@ public sealed class SaveRestoreService
         var root = document.RootElement;
         int schema = root.TryGetProperty("schemaVersion", out var schemaValue) && schemaValue.TryGetInt32(out int version) ? version : 1;
         DateTimeOffset? created = root.TryGetProperty("createdAt", out var createdValue) && createdValue.TryGetDateTimeOffset(out var date) ? date : null;
+        bool pendingPackage = root.TryGetProperty("pendingRestore", out var pendingValue) && pendingValue.ValueKind == JsonValueKind.True;
         if (!root.TryGetProperty("games", out var gamesValue) || gamesValue.ValueKind != JsonValueKind.Array) throw new InvalidDataException("O manifesto não possui uma lista de jogos.");
         var games = new List<ManifestGame>();
         foreach (var game in gamesValue.EnumerateArray()) {
@@ -139,18 +188,44 @@ public sealed class SaveRestoreService
             }
             games.Add(new(id, name, locations.ToArray()));
         }
-        return new(created, schema < 2, games.ToArray());
+        return new(created, schema < 2, pendingPackage, games.ToArray());
     }
 
     private Game? FindGame(string? id, string name) => (!string.IsNullOrEmpty(id) ? catalog.FirstOrDefault(game => game.Id == id) : null) ?? catalog.FirstOrDefault(game => game.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-    private static string? MatchTarget(ManifestLocation source, SaveLocation[] known, HashSet<string> used)
+    private sealed record TargetMatch(string? Path, bool ProfileMigration, int Score);
+    private static TargetMatch MatchTarget(ManifestLocation source, SaveLocation[] known, HashSet<string> used, DateTimeOffset? backupCreated)
     {
-        string leaf = Path.GetFileName(source.OriginalPath?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? "");
-        string? target = known.FirstOrDefault(location => location.Kind == source.Kind && !used.Contains(location.Path) && Path.GetFileName(location.Path.TrimEnd(Path.DirectorySeparatorChar)).Equals(leaf, StringComparison.OrdinalIgnoreCase))?.Path ?? known.FirstOrDefault(location => location.Kind == source.Kind && !used.Contains(location.Path))?.Path;
-        if (target is not null) return target;
-        if (source.OriginalPath is null || !SafeRestoreTarget(source.OriginalPath)) return null;
-        return Path.GetFullPath(source.OriginalPath);
+        string? original = source.OriginalPath is not null && SafeRestoreTarget(source.OriginalPath) ? Path.GetFullPath(source.OriginalPath) : null;
+        var candidates = known.Where(location => location.Kind == source.Kind && !used.Contains(location.Path)).ToArray();
+        var exact = original is null ? null : candidates.FirstOrDefault(location => location.Path.Equals(original, StringComparison.OrdinalIgnoreCase));
+        if (exact is not null) {
+            var newerProfile = candidates.Where(location => !location.Path.Equals(exact.Path, StringComparison.OrdinalIgnoreCase) && ProfileShape(location.Path).Equals(ProfileShape(exact.Path), StringComparison.OrdinalIgnoreCase) && location.LastModified is not null)
+                .OrderByDescending(location => location.LastModified).FirstOrDefault();
+            if (newerProfile?.LastModified is { } newer && exact.LastModified is { } older && newer > older.AddMinutes(2) && (backupCreated is null || newer > backupCreated.Value.AddMinutes(-2))) return new(newerProfile.Path, true, 140);
+            return new(exact.Path, false, 160);
+        }
+        var ranked = candidates.Select(location => (Location: location, Score: Similarity(original, location.Path), Modified: location.LastModified ?? DateTimeOffset.MinValue)).OrderByDescending(item => item.Score).ThenByDescending(item => item.Modified).ToArray();
+        if (ranked.Length > 0) {
+            var best = ranked[0];
+            bool clear = ranked.Length == 1 || best.Score >= ranked[1].Score + 8 || best.Modified > ranked[1].Modified.AddMinutes(2);
+            if ((original is null && clear) || best.Score >= 45) return new(best.Location.Path, original is not null && !best.Location.Path.Equals(original, StringComparison.OrdinalIgnoreCase), best.Score);
+        }
+        if (original is not null && (File.Exists(original) || Directory.Exists(original))) return new(original, false, 20);
+        return new(null, false, 0);
     }
+    private static int Similarity(string? original, string candidate)
+    {
+        if (original is null) return 30;
+        if (ProfileShape(original).Equals(ProfileShape(candidate), StringComparison.OrdinalIgnoreCase)) return 120;
+        string? originalParent = Path.GetDirectoryName(original), candidateParent = Path.GetDirectoryName(candidate);
+        int score = originalParent?.Equals(candidateParent, StringComparison.OrdinalIgnoreCase) == true ? 85 : 0;
+        var left = original.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); var right = candidate.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        for (int i = 1; i <= Math.Min(left.Length, right.Length); i++) { if (!left[^i].Equals(right[^i], StringComparison.OrdinalIgnoreCase) && !(Volatile(left[^i]) && Volatile(right[^i]))) break; score += 8; }
+        for (int i = 0; i < Math.Min(left.Length, right.Length); i++) { if (!left[i].Equals(right[i], StringComparison.OrdinalIgnoreCase) && !(Volatile(left[i]) && Volatile(right[i]))) break; score += 4; }
+        return score;
+    }
+    private static string ProfileShape(string path) => string.Join(Path.DirectorySeparatorChar, path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Select(part => Volatile(part) ? "{profile}" : part));
+    private static bool Volatile(string part) => part.Length >= 4 && (part.All(char.IsAsciiDigit) || Guid.TryParse(part, out _) || (part.Length >= 8 && part.All(char.IsAsciiHexDigit)) || Regex.IsMatch(part, "^(?:profile|user|account|slot)[-_]?[a-z0-9]{4,}$", RegexOptions.IgnoreCase));
     private static int CountConflicts(RestoreLocation location) => location.Target is null ? 0 : location.Files.Count(file => File.Exists(TargetFile(location, file)));
     private static string TargetFile(RestoreLocation location, RestoreFile file) => location.Kind == "file" ? location.Target! : Path.Combine(location.Target!, file.Relative);
     private static bool SameLength(string path, long length) { try { return new FileInfo(path).Length == length; } catch { return false; } }
@@ -222,4 +297,5 @@ public sealed class SaveRestoreService
         target = UniqueFile(target); Directory.CreateDirectory(Path.GetDirectoryName(target)!); await CopySourceAsync(archive, state, file, target, false);
     }
     private static string UniqueFile(string path) { if (!File.Exists(path)) return path; string folder = Path.GetDirectoryName(path)!, stem = Path.GetFileNameWithoutExtension(path), extension = Path.GetExtension(path); for (int i = 2; i < 10000; i++) { string candidate = Path.Combine(folder, stem + "-" + i + extension); if (!File.Exists(candidate)) return candidate; } throw new IOException("Não foi possível guardar um arquivo importado."); }
+    private static string UniqueFolder(string path) { if (!Directory.Exists(path) && !File.Exists(path)) return path; for (int i = 2; i < 10000; i++) { string candidate = path + "-" + i; if (!Directory.Exists(candidate) && !File.Exists(candidate)) return candidate; } throw new IOException("Não foi possível criar a pasta para os saves pendentes."); }
 }

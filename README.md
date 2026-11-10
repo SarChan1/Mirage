@@ -36,7 +36,7 @@ O reconhecimento é feito pelo aplicativo do Discord para Windows e pode levar a
 - Central de saves com jogos instalados e saves órfãos deixados por jogos removidos.
 - Datas, quantidade de arquivos e tamanho estimado de cada conjunto de saves.
 - Backup de todos os saves encontrados para uma pasta organizada ou arquivo ZIP escolhido pelo usuário.
-- Restauração assistida de backups, com análise de destinos, preservação de conflitos e ponto de restauração antes de substituir arquivos.
+- Restauração assistida de backups, com análise de destinos, migração entre identificadores de perfil, preservação de conflitos e ponto de restauração antes de substituir arquivos.
 - Resultado da Central salvo localmente, verificação incremental e histórico de saves alterados, movidos ou removidos.
 - Funcionamento na bandeja com liberação da interface após 15 segundos em segundo plano.
 - Preferências armazenadas em `%LOCALAPPDATA%\Mirage`.
@@ -53,7 +53,7 @@ O resultado fica salvo em `%LOCALAPPDATA%\Mirage` e reaparece ao trocar de aba o
 
 O destino do backup sempre é escolhido pelo usuário. A busca e o backup não excluem, movem, substituem nem modificam os saves originais. Na restauração, o Mirage analisa o conteúdo antes de copiar. O modo seguro mantém os saves atuais e separa conflitos; o modo de substituição cria antes um ZIP com os arquivos que serão trocados. Jogos ainda não instalados ou sem uma pasta reconhecível ficam em **Imported Saves**, aguardando revisão.
 
-Alguns jogos criam uma pasta, perfil ou identificador novo somente depois da primeira execução ou do primeiro save. Após formatar o computador ou reinstalar um jogo, abra-o e salve uma vez antes de restaurar. O Mirage prioriza a pasta atual detectada e avisa quando só encontra o caminho antigo. Como jogos modificados podem usar caminhos próprios, confira os resultados antes de depender de um backup.
+Alguns jogos criam uma pasta, perfil ou identificador novo somente depois da primeira execução ou do primeiro save. Após formatar o computador ou reinstalar um jogo, abra-o e salve uma vez antes de restaurar. O Mirage compara a estrutura dos caminhos, identifica a pasta de perfil atual e pode encaixar nela o conteúdo do perfil antigo. Se o destino novo ainda não existir, o pacote fica pendente e é reavaliado ao retornar à Central; o app não recria silenciosamente o identificador obsoleto. Como jogos modificados podem usar caminhos próprios, confira os resultados antes de depender de um backup.
 
 ## Requisitos para usar
 

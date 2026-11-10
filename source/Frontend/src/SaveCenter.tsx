@@ -1,24 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, Archive, ArrowRight, CalendarClock, CheckCircle2, Clock3, Download, FolderArchive, FolderOpen, HardDrive, LoaderCircle, MoveRight, RefreshCw, Search, ShieldCheck, Trash2, UploadCloud } from "lucide-react";
 import { request } from "./bridge";
-import { useI18n } from "./i18n";
+import { translate, useI18n } from "./i18n";
 import "./save-center.css";
 
 type InstalledSaveGame = { gameId: string; name: string; initial: string; iconUrl: string | null; heroUrl: string | null; installFolder: string | null; locationCount: number; fileCount: number; sizeBytes: number; lastModified: string | null; installed: boolean; locations?: string[] };
 type SaveChange = { id: string; gameId: string; gameName: string; type: "added" | "removed" | "moved" | "modified" | "installed" | "uninstalled"; detectedAt: string; previousPath?: string | null; currentPath?: string | null };
 type SaveLibraryResult = { games: InstalledSaveGame[]; installedCount: number; withSavesCount: number; orphanCount: number; fileCount: number; sizeBytes: number; scannedAt: string; limited: boolean; changes?: SaveChange[]; fromCache?: boolean };
 type ExportResult = { selected: boolean; path: string | null; games: number; files: number; sizeBytes: number; format: "zip" | "folder" };
-type RestoreGame = { gameId: string; name: string; status: "ready" | "conflict" | "pending" | "invalid"; target: string | null; installed: boolean; files: number; sizeBytes: number; conflicts: number; note: string };
-type RestoreAnalysis = { token: string; sourceName: string; createdAt: string | null; games: RestoreGame[]; files: number; sizeBytes: number; readyGames: number; pendingGames: number; conflicts: number; legacy: boolean; selected?: boolean };
+type RestoreGame = { gameId: string; name: string; status: "ready" | "migration" | "conflict" | "pending" | "invalid"; target: string | null; installed: boolean; files: number; sizeBytes: number; conflicts: number; note: string; profileMigration?: boolean; previousPath?: string | null };
+type RestoreAnalysis = { token: string; sourceName: string; createdAt: string | null; games: RestoreGame[]; files: number; sizeBytes: number; readyGames: number; pendingGames: number; conflicts: number; legacy: boolean; profileMigrations?: number; pendingPackage?: boolean; selected?: boolean };
 type RestoreResult = { restoredFiles: number; preservedConflicts: number; pendingFiles: number; rollbackPath: string | null; pendingPath: string | null; analysis: RestoreAnalysis };
 type Busy = "loading" | "checking" | "full" | null;
 
 let sessionData: SaveLibraryResult | null = null;
 let sessionValidated = false;
 let sessionRequest: Promise<SaveLibraryResult> | null = null;
-const previewRestore: RestoreAnalysis = { token: "preview", sourceName: "Mirage-Saves-2026-11-10.zip", createdAt: "2026-11-10T12:00:00Z", files: 47, sizeBytes: 12_800_000, readyGames: 2, pendingGames: 1, conflicts: 3, legacy: false, games: [
+let sessionRestore: RestoreAnalysis | null = null;
+let sessionPendingChecked = false;
+let sessionPendingCheckedAt = 0;
+const previewRestore: RestoreAnalysis = { token: "preview", sourceName: "Mirage-Saves-2026-11-10.zip", createdAt: "2026-11-10T12:00:00Z", files: 47, sizeBytes: 12_800_000, readyGames: 2, pendingGames: 1, conflicts: 3, profileMigrations: 1, legacy: false, games: [
   { gameId: "preview-cyberpunk", name: "Cyberpunk 2077", status: "conflict", target: String.raw`C:\Users\Player\Saved Games\CD Projekt Red\Cyberpunk 2077`, installed: true, files: 18, sizeBytes: 6_300_000, conflicts: 3, note: "Já existem saves nesse destino. Você escolherá como tratar os conflitos." },
-  { gameId: "preview-stardew", name: "Stardew Valley", status: "ready", target: String.raw`C:\Users\Player\AppData\Roaming\StardewValley\Saves`, installed: true, files: 21, sizeBytes: 4_900_000, conflicts: 0, note: "Destino atual reconhecido e pronto para restauração." },
+  { gameId: "preview-crimson", name: "Crimson Desert", status: "migration", target: String.raw`C:\Users\Player\AppData\Local\Pearl Abyss\CD\save\9218475521`, previousPath: String.raw`C:\Users\Player\AppData\Local\Pearl Abyss\CD\save\6183201944`, profileMigration: true, installed: true, files: 21, sizeBytes: 4_900_000, conflicts: 0, note: "Novo perfil detectado. Os saves serão encaixados na pasta atual mais compatível." },
   { gameId: "preview-witcher", name: "The Witcher 3: Wild Hunt", status: "pending", target: null, installed: false, files: 8, sizeBytes: 1_600_000, conflicts: 0, note: "O jogo não está instalado. Os arquivos serão guardados até você instalá-lo e criar um save." },
 ] };
 
@@ -44,7 +47,7 @@ export function SaveCenter({ preview, onInspect }: { preview: boolean; onInspect
   const [exporting, setExporting] = useState<"zip" | "folder" | null>(null);
   const [error, setError] = useState("");
   const [exported, setExported] = useState<ExportResult | null>(null);
-  const [restore, setRestore] = useState<RestoreAnalysis | null>(preview ? previewRestore : null);
+  const [restore, setRestore] = useState<RestoreAnalysis | null>(preview ? previewRestore : sessionRestore);
   const [restored, setRestored] = useState<RestoreResult | null>(null);
   const [restoreMode, setRestoreMode] = useState<"merge" | "replace">("merge");
   const [restoreBusy, setRestoreBusy] = useState(false);
@@ -69,6 +72,16 @@ export function SaveCenter({ preview, onInspect }: { preview: boolean; onInspect
         try { const checked = await run("saves.validate"); if (active) setData(checked); }
         catch (reason) { if (active) setError((reason as Error).message); }
         finally { if (active) setBusy(null); }
+      }
+      const retryPending = Boolean(sessionRestore?.pendingPackage) && Date.now() - sessionPendingCheckedAt > 30_000;
+      if (!preview && (!sessionPendingChecked || retryPending)) {
+        sessionPendingChecked = true;
+        sessionPendingCheckedAt = Date.now();
+        try {
+          if (retryPending) { const checked = await run("saves.validate"); if (active) setData(checked); }
+          const pending = await request<RestoreAnalysis & { empty?: boolean }>("saves.restore.pending");
+          if (!pending.empty) { sessionRestore = pending; if (active) setRestore(pending); }
+        } catch { /* A biblioteca continua disponível mesmo se um pacote pendente tiver sido removido externamente. */ }
       }
     }
     void open();
@@ -104,14 +117,33 @@ export function SaveCenter({ preview, onInspect }: { preview: boolean; onInspect
 
   async function chooseRestore(command: "saves.restore.chooseZip" | "saves.restore.chooseFolder") {
     setRestoreBusy(true); setError(""); setRestored(null);
-    try { const result = await request<RestoreAnalysis>(command); if (result.token) setRestore(result); }
+    try { const result = await request<RestoreAnalysis>(command); if (result.token) { sessionRestore = result; setRestore(result); } }
     catch (reason) { setError((reason as Error).message); }
+    finally { setRestoreBusy(false); }
+  }
+  async function recheckPending() {
+    setRestoreBusy(true); setError("");
+    try {
+      const checked = await run("saves.validate"); setData(checked); sessionValidated = true;
+      const pending = await request<RestoreAnalysis & { empty?: boolean }>("saves.restore.pending");
+      sessionPendingChecked = true; sessionPendingCheckedAt = Date.now();
+      if (pending.empty) { sessionRestore = null; setRestore(null); }
+      else { sessionRestore = pending; setRestore(pending); setRestored(null); }
+    } catch (reason) { setError((reason as Error).message); }
     finally { setRestoreBusy(false); }
   }
   async function applyRestore() {
     if (!restore) return;
     setRestoreBusy(true); setError("");
-    try { const result = await request<RestoreResult>("saves.restore.apply", { token: restore.token, mode: restoreMode }); setRestored(result); setData(await run("saves.validate")); }
+    try {
+      const result = await request<RestoreResult>("saves.restore.apply", { token: restore.token, mode: restoreMode }); setRestored(result); setData(await run("saves.validate"));
+      if (result.pendingPath || restore.pendingPackage) {
+        const pending = await request<RestoreAnalysis & { empty?: boolean }>("saves.restore.pending");
+        sessionPendingChecked = true; sessionPendingCheckedAt = Date.now();
+        if (pending.empty) { sessionRestore = null; setRestore(null); }
+        else { sessionRestore = pending; setRestore(pending); }
+      }
+    }
     catch (reason) { setError((reason as Error).message); }
     finally { setRestoreBusy(false); }
   }
@@ -140,12 +172,12 @@ export function SaveCenter({ preview, onInspect }: { preview: boolean; onInspect
         <div className="save-health-card"><ShieldCheck size={18} /><span><strong>Originais protegidos</strong><small>A Central apenas lê metadados. Nada é movido ou excluído.</small></span></div>
       </div>
       <div className="save-restore-card">
-        <div className="save-restore-intro"><span className="save-restore-icon"><UploadCloud size={18} /></span><span><strong>Reinserir saves de um backup</strong><small>Analise um ZIP ou uma pasta antes de devolver os arquivos aos jogos.</small></span><div><button className="button secondary small" disabled={preview || restoreBusy} onClick={() => void chooseRestore("saves.restore.chooseFolder")}><FolderOpen size={14} /> Pasta</button><button className="button secondary small" disabled={preview || restoreBusy} onClick={() => void chooseRestore("saves.restore.chooseZip")}>{restoreBusy ? <LoaderCircle className="spin" size={14} /> : <Download size={14} />} Selecionar ZIP</button></div></div>
+        <div className="save-restore-intro"><span className="save-restore-icon"><UploadCloud size={18} /></span><span><strong>Reinserir saves de um backup</strong><small>Analise um ZIP ou uma pasta antes de devolver os arquivos aos jogos.</small></span><div><button className="button ghost small" disabled={preview || restoreBusy} onClick={() => void recheckPending()}><RefreshCw size={14} /> Rever pendentes</button><button className="button secondary small" disabled={preview || restoreBusy} onClick={() => void chooseRestore("saves.restore.chooseFolder")}><FolderOpen size={14} /> Pasta</button><button className="button secondary small" disabled={preview || restoreBusy} onClick={() => void chooseRestore("saves.restore.chooseZip")}>{restoreBusy ? <LoaderCircle className="spin" size={14} /> : <Download size={14} />} Selecionar ZIP</button></div></div>
         <div className="save-restore-warning"><AlertTriangle size={14} /><span><strong>Depois de formatar ou reinstalar um jogo, abra-o e crie um save uma vez.</strong><small>Alguns jogos geram uma nova pasta, um novo perfil ou outro identificador. O Mirage prioriza a pasta atual e avisa quando só encontra o caminho antigo.</small></span></div>
         {restore && <div className="save-restore-analysis">
-          <div className="restore-summary"><span><strong>{restore.sourceName}</strong><small>{restore.games.length} jogos · {restore.files.toLocaleString(locale)} arquivos · {bytes(restore.sizeBytes, locale)}</small></span><span className="restore-summary-badges"><i className="ready">{restore.readyGames} prontos</i>{restore.pendingGames > 0 && <i className="pending">{restore.pendingGames} aguardando</i>}{restore.conflicts > 0 && <i className="conflict">{restore.conflicts} conflitos</i>}</span></div>
+          <div className="restore-summary"><span><strong>{restore.sourceName}</strong><small>{restore.games.length} jogos · {restore.files.toLocaleString(locale)} arquivos · {bytes(restore.sizeBytes, locale)}</small></span><span className="restore-summary-badges"><i className="ready">{restore.readyGames} prontos</i>{Boolean(restore.profileMigrations) && <i className="migration">{restore.profileMigrations} {translate(restore.profileMigrations === 1 ? "novo perfil" : "novos perfis", locale)}</i>}{restore.pendingGames > 0 && <i className="pending">{restore.pendingGames} aguardando</i>}{restore.conflicts > 0 && <i className="conflict">{restore.conflicts} conflitos</i>}</span></div>
           {restore.legacy && <p className="restore-legacy"><AlertTriangle size={13} /> Este é um backup antigo. Caminhos atuais serão usados quando reconhecidos; o restante ficará guardado para revisão.</p>}
-          <div className="restore-game-list">{restore.games.slice(0, 8).map(game => <div className={`restore-game is-${game.status}`} key={game.gameId}><span className="restore-state-dot" /><span><strong>{game.name}</strong><small>{game.note}</small>{game.target && <code title={game.target}>{game.target}</code>}</span><span>{game.files} arquivos{game.conflicts > 0 && <small>{game.conflicts} conflitos</small>}</span></div>)}</div>
+          <div className="restore-game-list">{restore.games.slice(0, 8).map(game => <div className={`restore-game is-${game.status}`} key={game.gameId}><span className="restore-state-dot" /><span><strong>{game.name}</strong><small>{game.note}</small>{game.previousPath && <code className="restore-old-path" title={game.previousPath}>{translate("Anterior:", locale)} {game.previousPath}</code>}{game.target && <code title={game.target}>{game.profileMigration ? `${translate("Atual:", locale)} ` : ""}{game.target}</code>}</span><span>{game.files} arquivos{game.conflicts > 0 && <small>{game.conflicts} conflitos</small>}</span></div>)}</div>
           <div className="restore-policy"><label><input type="radio" name="restore-mode" checked={restoreMode === "merge"} onChange={() => setRestoreMode("merge")} /><span><strong>Mesclar com segurança</strong><small>Mantém saves atuais e separa arquivos conflitantes para revisão.</small></span></label><label><input type="radio" name="restore-mode" checked={restoreMode === "replace"} onChange={() => setRestoreMode("replace")} /><span><strong>Substituir com ponto de restauração</strong><small>Guarda os saves atuais em um ZIP antes de substituí-los.</small></span></label><button className="button primary small" disabled={preview || restoreBusy || !restore.files} onClick={() => void applyRestore()}>{restoreBusy ? <LoaderCircle className="spin" size={14} /> : <UploadCloud size={14} />} Restaurar saves</button></div>
         </div>}
         {restored && <div className="restore-result" role="status"><CheckCircle2 size={16} /><span><strong>Restauração concluída</strong><small>{restored.restoredFiles} inseridos · {restored.preservedConflicts} conflitos preservados · {restored.pendingFiles} aguardando destino</small></span><div>{restored.pendingPath && <button className="button ghost small" onClick={() => void request("saves.restore.open", { kind: "pending" })}>Abrir pendentes</button>}{restored.rollbackPath && <button className="button ghost small" onClick={() => void request("saves.restore.open", { kind: "rollback" })}>Abrir ponto de restauração</button>}</div></div>}
