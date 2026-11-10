@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +11,8 @@ namespace Mirage;
 
 public sealed partial class WebWindow
 {
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetProcessWorkingSetSize(IntPtr process, nint minimum, nint maximum);
     private const int BackgroundReleaseSeconds = 15;
     private static readonly TimeSpan ForegroundTickInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan BackgroundTickInterval = TimeSpan.FromSeconds(5);
@@ -71,6 +75,8 @@ public sealed partial class WebWindow
             if (!closing && !UiVisible && revision == visibilityRevision) {
                 var watch = System.Diagnostics.Stopwatch.StartNew();
                 GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                using var process = Process.GetCurrentProcess();
+                SetProcessWorkingSetSize(process.Handle, -1, -1);
                 lastMemoryReleaseMilliseconds = watch.Elapsed.TotalMilliseconds;
             }
         } catch (Exception ex) when (ex is OperationCanceledException or TimeoutException or InvalidOperationException) { }

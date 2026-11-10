@@ -32,7 +32,8 @@ public sealed class ProcessSession : IDisposable
         if (!parts[^1].EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Este registro não contém um executável Windows.");
         return Path.Combine(parts);
     }
-    public static List<GameExecutable> Options(Game game) => game.CachedExecutables ?? (game.Executables ?? []).Where(e => e.Os == "win32" && !e.IsLauncher && IsSupported(e.Name)).DistinctBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    internal static bool IsSupportedOption(GameExecutable executable) => executable.Os == "win32" && !executable.IsLauncher && IsSupported(executable.Name);
+    public static List<GameExecutable> Options(Game game) => game.CachedExecutables ??= (game.Executables ?? []).Where(IsSupportedOption).DistinctBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
     private static bool IsSupported(string name) { try { ValidateRelativePath(name); return true; } catch (ArgumentException) { return false; } }
     public static string ResolvePath(string root, string gameId, string version, string relative)
     {

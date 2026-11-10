@@ -153,31 +153,47 @@ p {
   -webkit-app-region: no-drag;
 }
 .language-picker {
-  height: 24px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
+  position: relative;
+  height: 26px;
   margin-right: 5px;
-  padding-left: 8px;
-  color: #8f8f99;
-  background: #1a1a1d;
+  z-index: 30;
+}
+.language-native-proxy { position:absolute!important; width:1px!important; height:1px!important; opacity:0!important; pointer-events:none!important; }
+.language-trigger {
+  height: 26px;
+  min-width: 132px;
+  display: grid;
+  grid-template-columns:auto auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: #92929c;
+  background: #19191d;
   border: 1px solid #ffffff12;
-  border-radius: 6px;
-}
-.language-picker:focus-within {
-  border-color: #a49cf566;
-}
-.language-picker select {
-  width: 116px;
-  height: 22px;
-  padding: 0 20px 0 0;
-  border: 0;
-  border-radius: 0;
-  color: #b9b9c2;
-  background: transparent;
+  border-radius: 7px;
   font-size: 9px;
-  outline: 0;
+  text-align: left;
 }
+.language-trigger:hover,.language-trigger[aria-expanded=true] { color:#c6c3dd; border-color:#9d95e14a; background:#1d1d22; }
+.language-trigger svg:last-child { color:#6f6f79; transition:transform .16s ease; }.language-trigger svg:last-child.is-open { transform:rotate(180deg); }
+.language-code { display:grid; place-items:center; width:24px; height:16px; border-radius:4px; color:#b8b2ee; background:#8d86e814; font-size:8px; font-weight:650; letter-spacing:.04em; }
+.language-name { color:#a8a8b2; }
+.language-menu {
+  position:absolute;
+  top:31px;
+  right:0;
+  width:178px;
+  padding:6px;
+  border:1px solid #ffffff16;
+  border-radius:9px;
+  background:#1c1c21;
+  box-shadow:0 16px 38px #0009,0 2px 8px #0005;
+}
+.language-menu-title { padding:5px 8px 7px; color:#676772; font-size:8px; text-transform:uppercase; letter-spacing:.1em; }
+.language-menu button { width:100%; min-height:34px; display:grid; grid-template-columns:30px 1fr auto; align-items:center; gap:8px; padding:0 8px; border-radius:6px; color:#aaaab5; font-size:9px; text-align:left; }
+.language-menu button:hover,.language-menu button[aria-checked=true] { color:#dedce9; background:#ffffff09; }
+.language-menu button[aria-checked=true] { background:#8d86e812; }.language-menu button svg { color:#aaa3ef; }
+.language-option-code { color:#8f88d9; font-size:8px; font-weight:650; letter-spacing:.05em; }
 .window-buttons {
   display: flex;
   align-self: stretch;

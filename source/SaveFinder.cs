@@ -79,6 +79,19 @@ public sealed class SaveFinder
         try { return await Task.Run(() => ScanOrphans(source, installedIds)); }
         finally { gate.Release(); }
     }
+    public async Task<SaveLocation[]> RefreshKnownAsync(IEnumerable<SaveLocation> known)
+    {
+        await gate.WaitAsync();
+        try {
+            var result = await Task.Run(() => known
+                .Where(location => location.Kind != "registry" && (File.Exists(location.Path) || Directory.Exists(location.Path)))
+                .Take(160)
+                .Select(Describe)
+                .ToArray());
+            lastLocations = result.ToDictionary(location => location.Id);
+            return result;
+        } finally { gate.Release(); }
+    }
     public SaveLocation Resolve(string id) => lastLocations.TryGetValue(id, out var result) && result.Kind != "registry" && (Directory.Exists(result.Path) || File.Exists(result.Path)) ? result : throw new ArgumentException("Esse local não está mais disponível. Faça uma nova busca.");
     public string PathToCopy(string id) => lastLocations.TryGetValue(id, out var result) ? result.Path : throw new ArgumentException("Faça uma nova busca antes de copiar esse caminho.");
     public static string ValidateFolder(string path)

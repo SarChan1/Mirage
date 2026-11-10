@@ -85,5 +85,10 @@ $after = if (Test-Path -LiteralPath $preferencePath) { (Get-FileHash -LiteralPat
 if ($before -ne $after) { throw 'As preferências mudaram durante o teste; verificar se houve uma edição na outra instância.' }
 [ordered]@{installed=$true;upgradeTested=[bool]$BaselineSetupPath;activeAppUpdateBlocked=$activeAppUpdateBlocked;previousVersion=$previousVersion;installedVersion=(Get-Item -LiteralPath $ExpectedExecutable).VersionInfo.ProductVersion.Split('+')[0];installedAppUiChecks=$report.checks.Count;uninstalled=$true;preferencesPreserved=$true;coLocatedDataPreserved=$true;webViewAlreadyInstalled=$true;missingRuntimeBranchTested=$false;shortcutsCreated=$false;testDirectory=$target;preferencesSha256=$after} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $workRoot 'installer-qa-result.json') -Encoding utf8NoBOM
 if (!$target.StartsWith($workRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Pasta de teste inválida.' }
-Remove-Item -LiteralPath $target -Recurse -Force
+for ($attempt = 0; $attempt -lt 40 -and (Test-Path -LiteralPath $uninstall); $attempt++) { Start-Sleep -Milliseconds 250 }
+for ($attempt = 0; $attempt -lt 20 -and (Test-Path -LiteralPath $target); $attempt++) {
+    try { Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop }
+    catch [UnauthorizedAccessException] { Start-Sleep -Milliseconds 250 }
+}
+if (Test-Path -LiteralPath $target) { throw 'A pasta temporária do teste permaneceu bloqueada após a desinstalação.' }
 Write-Output 'INSTALLER_UNINSTALL_OK PREFERENCES_PRESERVED'

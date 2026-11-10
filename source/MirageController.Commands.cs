@@ -13,7 +13,10 @@ public sealed partial class MirageController
     private static readonly string AppVersion = typeof(MirageController).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
     private readonly SaveFinder saveFinder = new();
     private SaveLibraryService? saveLibraryService;
-    private SaveLibraryService SaveLibrary => saveLibraryService ??= new SaveLibraryService(saveFinder);
+    private SaveLibraryService SaveLibrary => saveLibraryService ??= new SaveLibraryService(saveFinder, cachePath: System.IO.Path.Combine(Paths.Data, "save-library.json"));
+    private SaveRestoreService? saveRestoreService;
+    private SaveRestoreService SaveRestore => saveRestoreService ??= new SaveRestoreService(SaveLibrary, games);
+    private SaveRestoreResult? lastRestore;
     private readonly Dictionary<string, string> saveInstallFolders = [];
     public void SetSaveInstallFolder(string gameId, string path) { WebGame(gameId); saveInstallFolders[gameId] = SaveFinder.ValidateFolder(path); }
     public SaveLocation ResolveSaveLocation(string id) => saveFinder.Resolve(id);
@@ -22,10 +25,20 @@ public sealed partial class MirageController
     {
         if (!PreviewOnly) return SaveLibrary.ScanAsync(games);
         var sample = new[] { "Cyberpunk 2077", "Stardew Valley", "The Witcher 3: Wild Hunt", "Resident Evil 4", "Minecraft" }.Select(name => games.FirstOrDefault(game => game.Name == name)).OfType<Game>().Select((game, index) => new InstalledSaveGame(game.Id, game.Name, game.Initial, game.IconUrl, game.HeroUrl, index == 4 ? null : @"C:\Games\" + game.Name, index == 3 ? 0 : index + 1, index == 3 ? 0 : 12 + index * 19, index == 3 ? 0 : 1_400_000L + index * 8_200_000L, index == 3 ? null : DateTimeOffset.UtcNow.AddDays(-index).AddHours(-2), index != 4)).ToArray();
-        return Task.FromResult(new SaveLibraryResult(sample, sample.Count(game => game.Installed), sample.Count(game => game.LocationCount > 0), sample.Count(game => !game.Installed), sample.Sum(game => game.FileCount), sample.Sum(game => game.SizeBytes), DateTimeOffset.UtcNow, false));
+        var changes = new[] { new SaveChange("preview-modified", sample[0].GameId, sample[0].Name, "modified", DateTimeOffset.UtcNow.AddMinutes(-18)), new SaveChange("preview-moved", sample[1].GameId, sample[1].Name, "moved", DateTimeOffset.UtcNow.AddDays(-1), @"C:\Old Saves", @"C:\New Saves") };
+        return Task.FromResult(new SaveLibraryResult(sample, sample.Count(game => game.Installed), sample.Count(game => game.LocationCount > 0), sample.Count(game => !game.Installed), sample.Sum(game => game.FileCount), sample.Sum(game => game.SizeBytes), DateTimeOffset.UtcNow, false, changes));
     }
+    public Task<SaveLibraryResult?> LoadSaveLibraryAsync() => Task.FromResult(PreviewOnly ? null : SaveLibrary.LoadCached());
+    public Task<SaveLibraryResult> ValidateSaveLibraryAsync() => PreviewOnly ? ScanSaveLibraryAsync() : SaveLibrary.ValidateCachedAsync(games);
     public Task<SaveExportResult> ExportSaveLibraryAsync(string destination, bool zip) => SaveLibrary.ExportAsync(games, destination, zip);
     public string ResolveLastSaveExport() => SaveLibrary.ResolveLastExport();
+    public Task<SaveRestoreAnalysis> AnalyzeSaveRestoreAsync(string path) => SaveRestore.AnalyzeAsync(path);
+    public async Task<SaveRestoreResult> RestoreSavesAsync(string token, string mode) => lastRestore = await SaveRestore.RestoreAsync(token, mode);
+    public string ResolveLastRestorePath(string kind)
+    {
+        string? path = kind == "rollback" ? lastRestore?.RollbackPath : kind == "pending" ? lastRestore?.PendingPath : null;
+        return path is not null && (System.IO.File.Exists(path) || System.IO.Directory.Exists(path)) ? path : throw new InvalidOperationException("Esse local de restauração não está mais disponível.");
+    }
     private PlaylistWorkspace? playlistWorkspace;
     private PlaylistWorkspace Workspace => playlistWorkspace ??= new PlaylistWorkspace(prefs);
     public async Task UpdateLibraryInformationAsync()
@@ -116,7 +129,10 @@ public sealed partial class MirageController
     {
         ObjectDisposedException.ThrowIf(quitting, this);
         switch (command) {
+            case "saves.load": { var cached = await LoadSaveLibraryAsync(); if (cached is null) return new { empty = true }; return cached; }
+            case "saves.validate": return await ValidateSaveLibraryAsync();
             case "saves.scanInstalled": return await ScanSaveLibraryAsync();
+            case "saves.restore.apply": return await RestoreSavesAsync(TextArg(args, "token"), TextArg(args, "mode", "merge"));
             case "saves.find": {
                 var game = WebGame(TextArg(args, "gameId"));
                 string? folder = null;

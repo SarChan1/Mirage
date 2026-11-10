@@ -26,7 +26,7 @@ public sealed class Game
     [JsonIgnore] public string? HeroUrl => SteamId is not null ? $"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{SteamId}/header.jpg" : Cover is not null ? $"https://cdn.discordapp.com/app-assets/{Id}/store/{Cover}.jpg?size=512" : IconUrl;
     [JsonIgnore] public string SearchKey { get; set; } = "";
     [JsonIgnore] internal List<GameExecutable>? CachedExecutables { get; set; }
-    [JsonIgnore] public bool SupportsPlaylist => ProcessSession.Options(this).Count > 0;
+    [JsonIgnore] public bool SupportsPlaylist => CachedExecutables?.Count > 0 || (Executables ?? []).Any(ProcessSession.IsSupportedOption);
 }
 public sealed class GameExecutable
 {
@@ -76,8 +76,9 @@ public static class GameSearch
     {
         foreach (var g in games) {
             g.SearchKey = Normalize(g.Name + " " + string.Join(" ", g.Aliases ?? []));
+            g.Executables = (g.Executables ?? []).Where(ProcessSession.IsSupportedOption).DistinctBy(executable => executable.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+            foreach (var executable in g.Executables) executable.Os = "win32";
             g.CachedExecutables = null;
-            g.CachedExecutables = ProcessSession.Options(g);
         }
     }
     public static IEnumerable<Game> Find(IEnumerable<Game> games, string query)

@@ -311,6 +311,12 @@ export async function runSmoke(scene = "library") {
     }
     check(document.querySelector('[data-testid="save-center"]') !== null, "save center has its own navigation view");
     check(document.querySelectorAll(".save-overview > div").length === 4, "save center presents installation and backup metadata");
+    check(document.querySelectorAll(".save-change").length >= 2, "save center presents recent file changes without hiding the library");
+    check((document.querySelector(".save-activity")?.getBoundingClientRect().height ?? 0) >= 80, "recent save changes remain visibly readable");
+    check((document.querySelector(".save-restore-warning")?.textContent?.length ?? 0) > 80, "restore area warns about folders created after the first in-game save");
+    check(Array.from(document.querySelectorAll<HTMLButtonElement>(".save-restore-intro button")).every(button => button.disabled), "preview never opens or restores user backup files");
+    check(document.querySelectorAll(".restore-game").length === 3, "restore review separates ready, conflicting, and pending games");
+    check(document.querySelector<HTMLButtonElement>(".restore-policy .button")?.disabled === true, "preview never applies a restore plan");
     check(document.querySelectorAll<HTMLButtonElement>(".save-backup-card button")[0]?.disabled === true, "preview never writes a save backup");
     check(document.documentElement.scrollWidth <= innerWidth, "save center has no horizontal overflow");
   }
@@ -334,6 +340,10 @@ export async function runSmoke(scene = "library") {
         ? /\b(sequência|jogos?|duração|configurações|ações|exibição|escolha|seu|sua|inicie|adicionar|detalhes)\b/i
         : /$a/;
     check(!portuguese.test(translatedText), `locale ${target} has no visible Portuguese leftovers`);
+    document.querySelector<HTMLButtonElement>(".language-trigger")!.click();
+    await until(() => document.querySelectorAll('.language-menu [role="menuitemradio"]').length === 3, "language menu did not open");
+    const menuRect = document.querySelector(".language-menu")!.getBoundingClientRect();
+    check(menuRect.left >= 0 && menuRect.right <= innerWidth, `locale ${target} menu fits the title bar`);
   }
   return {
     ok: true,

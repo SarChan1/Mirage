@@ -210,6 +210,25 @@ public sealed partial class WebWindow : Window
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = folder, UseShellExecute = true });
                     result = new { ok = true }; break;
                 }
+                case "saves.restore.chooseZip": {
+                    if (PreviewOnly) throw new InvalidOperationException("A prévia não abre arquivos do computador.");
+                    var dialog = new Microsoft.Win32.OpenFileDialog { Title = L("Escolha um backup de saves do Mirage", "Choose a Mirage save backup", "Elige una copia de partidas de Mirage"), Filter = "Mirage ZIP (*.zip)|*.zip", CheckFileExists = true, Multiselect = false };
+                    if (dialog.ShowDialog(this) != true) { result = new { selected = false }; break; }
+                    result = await engine.AnalyzeSaveRestoreAsync(dialog.FileName); break;
+                }
+                case "saves.restore.chooseFolder": {
+                    if (PreviewOnly) throw new InvalidOperationException("A prévia não abre pastas do computador.");
+                    var dialog = new Microsoft.Win32.OpenFolderDialog { Title = L("Escolha uma pasta de backup do Mirage", "Choose a Mirage backup folder", "Elige una carpeta de copia de Mirage"), Multiselect = false };
+                    if (dialog.ShowDialog(this) != true) { result = new { selected = false }; break; }
+                    result = await engine.AnalyzeSaveRestoreAsync(dialog.FolderName); break;
+                }
+                case "saves.restore.open": {
+                    if (PreviewOnly) throw new InvalidOperationException("A prévia não abre pastas do computador.");
+                    string output = engine.ResolveLastRestorePath(args.TryGetProperty("kind", out var kindValue) ? kindValue.GetString() ?? "pending" : "pending");
+                    string folder = File.Exists(output) ? Path.GetDirectoryName(output)! : output;
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = folder, UseShellExecute = true });
+                    result = new { ok = true }; break;
+                }
                 case "saves.copy": {
                     if (PreviewOnly) throw new InvalidOperationException("A prévia não altera a área de transferência.");
                     string path = engine.GetSavePathToCopy(args.GetProperty("id").GetString() ?? "");

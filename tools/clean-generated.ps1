@@ -1,12 +1,13 @@
 param([string]$ReportPath = '')
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot)).TrimEnd([IO.Path]::DirectorySeparatorChar)
-if (!(Test-Path -LiteralPath (Join-Path $projectRoot 'source\Mirage.csproj')) -or !(Test-Path -LiteralPath (Join-Path $projectRoot 'Mirage.exe'))) { throw 'Esta não é a pasta esperada do Mirage.' }
+if (!(Test-Path -LiteralPath (Join-Path $projectRoot 'source\Mirage.csproj'))) { throw 'Esta não é a pasta esperada do Mirage.' }
 $prefix = $projectRoot + [IO.Path]::DirectorySeparatorChar
 $activePaths = @(Get-Process Mirage -ErrorAction SilentlyContinue | ForEach-Object { try { $_.Path } catch { } } | Where-Object { $_ })
 $removed = [Collections.Generic.List[object]]::new()
 $skipped = [Collections.Generic.List[object]]::new()
-$executableHash = (Get-FileHash -LiteralPath (Join-Path $projectRoot 'Mirage.exe') -Algorithm SHA256).Hash
+$rootExecutable = Join-Path $projectRoot 'Mirage.exe'
+$executableHash = if (Test-Path -LiteralPath $rootExecutable) { (Get-FileHash -LiteralPath $rootExecutable -Algorithm SHA256).Hash } else { $null }
 function Remove-Generated([string]$Path) {
     if (!(Test-Path -LiteralPath $Path)) { return }
     $resolved = (Resolve-Path -LiteralPath $Path).ProviderPath
@@ -33,7 +34,7 @@ function Remove-Generated([string]$Path) {
 foreach ($relative in @('backups','work','qa-results','source\bin','source\obj','source\Tests\bin','source\Tests\obj','source\Frontend\node_modules','source\Frontend\dist','tools\sandbox','tools\__pycache__','tools\tests\__pycache__')) { Remove-Generated (Join-Path $projectRoot $relative) }
 Get-ChildItem -LiteralPath $projectRoot -Directory | Where-Object { $_.Name -match '^release-\d+(\.\d+){1,2}$' } | ForEach-Object { Remove-Generated $_.FullName }
 Get-ChildItem -LiteralPath $projectRoot -File | Where-Object { $_.Name -match '^preview([-.]|\.)' -or $_.Name -match '^Mirage-running-[\w.\-]+\.exe$' -or $_.Name -in @('Mirage.pdb','probe.txt') } | ForEach-Object { Remove-Generated $_.FullName }
-$currentVersion = [version](Get-Item -LiteralPath (Join-Path $projectRoot 'Mirage.exe')).VersionInfo.ProductVersion.Split('+')[0]
+$currentVersion = if (Test-Path -LiteralPath $rootExecutable) { [version](Get-Item -LiteralPath $rootExecutable).VersionInfo.ProductVersion.Split('+')[0] } else { [version]([xml](Get-Content -LiteralPath (Join-Path $projectRoot 'source\Mirage.csproj') -Raw)).Project.PropertyGroup.Version }
 $distribution = Join-Path $projectRoot 'dist'
 if (Test-Path -LiteralPath $distribution) {
     Get-ChildItem -LiteralPath $distribution -File | ForEach-Object {
@@ -42,8 +43,8 @@ if (Test-Path -LiteralPath $distribution) {
         }
     }
 }
-$afterHash = (Get-FileHash -LiteralPath (Join-Path $projectRoot 'Mirage.exe') -Algorithm SHA256).Hash
-if ($afterHash -ne $executableHash) { throw 'O executável atual mudou durante a limpeza.' }
+$afterHash = if (Test-Path -LiteralPath $rootExecutable) { (Get-FileHash -LiteralPath $rootExecutable -Algorithm SHA256).Hash } else { $null }
+if ($executableHash -and $afterHash -ne $executableHash) { throw 'O executável atual mudou durante a limpeza.' }
 $report = [ordered]@{root=$projectRoot;removedBytes=($removed | Measure-Object -Property bytes -Sum).Sum;removed=$removed.ToArray();skipped=$skipped.ToArray();currentExecutableSha256=$afterHash}
 if ($ReportPath) { $report | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding utf8NoBOM }
 Write-Output ('Removidos: ' + [Math]::Round($report.removedBytes / 1GB, 2) + ' GiB')

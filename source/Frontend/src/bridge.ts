@@ -72,7 +72,7 @@ export function request<T = NativeState>(
   return new Promise<T>((resolve, reject) => {
     const id = crypto.randomUUID();
     // A native folder picker can remain open for as long as the user needs.
-    const timer = command === "saves.chooseFolder" || command === "saves.scanInstalled" || command === "saves.export" ? undefined : setTimeout(
+    const timer = command === "saves.chooseFolder" || command === "saves.scanInstalled" || command === "saves.validate" || command === "saves.export" || command.startsWith("saves.restore.") ? undefined : setTimeout(
       () => {
         pending.delete(id);
         reject(

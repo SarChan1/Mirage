@@ -14,7 +14,11 @@ Os caminhos mapeados vêm do Ludusavi Manifest, distribuído sob licença MIT. O
 
 ## Central de saves
 
-A Central de saves separa jogos instalados de saves órfãos que permaneceram depois da remoção de um jogo. Ela apresenta datas, quantidade de arquivos e tamanho estimado. O usuário pode criar uma cópia organizada em pasta ou um ZIP no local que escolher. A exportação apenas copia arquivos existentes; os originais não são movidos, substituídos ou apagados.
+A Central de saves separa jogos instalados de saves órfãos que permaneceram depois da remoção de um jogo. Ela apresenta datas, quantidade de arquivos e tamanho estimado. O resultado é mantido ao trocar de aba e ao reabrir o app. Uma verificação incremental confere locais conhecidos; a busca completa permanece disponível em **Verificar agora**.
+
+O usuário pode criar uma cópia organizada em pasta ou um ZIP no local que escolher e restaurá-la depois. Antes de reinserir arquivos, o Mirage mostra destinos, conflitos e jogos sem pasta disponível. **Mesclar com segurança** preserva saves atuais e separa conflitos para revisão. **Substituir com ponto de restauração** cria um ZIP dos arquivos atuais antes de trocá-los. Quando o jogo não está instalado ou ainda não criou uma pasta, os arquivos ficam guardados em `%LOCALAPPDATA%\Mirage\Imported Saves`.
+
+Depois de reinstalar um jogo, recomenda-se abri-lo e criar um save uma vez: alguns títulos geram uma pasta, um perfil ou identificador novo somente nessa etapa. O Mirage prioriza locais atuais reconhecidos em vez do caminho antigo do backup. A exportação apenas copia arquivos existentes; os originais não são movidos, substituídos ou apagados.
 
 Um jogo instalado pode ainda não ter saves, e versões modificadas podem usar caminhos diferentes. A busca não garante encontrar todos os jogos, contas ou formatos. Saves também podem permanecer depois de desinstalar um jogo. Parte dos padrões de localização ainda não é suportada.
 

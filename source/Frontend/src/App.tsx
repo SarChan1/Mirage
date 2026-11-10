@@ -199,6 +199,17 @@ function Art({
 }
 function WindowBar() {
   const { locale, setLocale } = useI18n();
+  const [open, setOpen] = useState(false);
+  const picker = useRef<HTMLDivElement>(null);
+  const current = localeOptions.find(option => option.value === locale)!;
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => { if (!picker.current?.contains(event.target as Node)) setOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", escape); };
+  }, [open]);
   return (
     <div className="window-bar">
       <div className="window-caption">
@@ -207,12 +218,18 @@ function WindowBar() {
         <span>Desktop</span>
       </div>
       <div className="window-actions">
-        <label className="language-picker" title="Idioma">
-          <Languages size={13} aria-hidden="true" />
-          <select aria-label="Idioma" value={locale} onChange={event => setLocale(event.target.value as Locale)}>
+        <div className="language-picker" title="Idioma" ref={picker} data-i18n-skip>
+          <select className="language-native-proxy" aria-hidden="true" tabIndex={-1} value={locale} onChange={event => setLocale(event.target.value as Locale)}>
             {localeOptions.map(option => <option key={option.value} value={option.value}>{option.short} · {option.label}</option>)}
           </select>
-        </label>
+          <button className="language-trigger" aria-label="Idioma" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>
+            <Languages size={13} aria-hidden="true" /><span className="language-code">{current.short}</span><span className="language-name">{current.label}</span><ChevronDown size={12} className={open ? "is-open" : ""} />
+          </button>
+          {open && <div className="language-menu" role="menu" aria-label="Idioma">
+            <div className="language-menu-title">Idioma</div>
+            {localeOptions.map(option => <button role="menuitemradio" aria-checked={locale === option.value} key={option.value} onClick={() => { setLocale(option.value); setOpen(false); }}><span className="language-option-code">{option.short}</span><span>{option.label}</span>{locale === option.value && <Check size={13} />}</button>)}
+          </div>}
+        </div>
         <div className="window-buttons">
         <button
           aria-label="Minimizar"

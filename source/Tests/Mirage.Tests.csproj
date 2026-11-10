@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="../SaveFinder.cs" Link="SaveFinder.cs" />
     <Compile Include="../SaveLibraryService.cs" Link="SaveLibraryService.cs" />
+    <Compile Include="../SaveRestoreService.cs" Link="SaveRestoreService.cs" />
     <EmbeddedResource Include="../catalog.saves.json" LogicalName="Mirage.catalog.saves.json" />
     <Compile Include="../MirageController.cs" Link="MirageController.cs" />
     <Compile Include="../MirageController.Commands.cs" Link="MirageController.Commands.cs" />

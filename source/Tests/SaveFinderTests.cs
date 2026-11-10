@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using Mirage;
 
 internal static class SaveFinderTests
@@ -58,20 +59,46 @@ internal static class SaveFinderTests
             }
             Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(save))) == originalHash, "search leaves save contents unchanged");
             string orphanFolder = Folder(@"Roaming\Orphan Game"); File.WriteAllText(Path.Combine(orphanFolder, "orphan.sav"), "preserved after uninstall");
-            var orphanRule = new SaveGameRules { Name = "Orphan Game", Paths = ["<winAppData>/Orphan Game"] };
+            var orphanRule = new SaveGameRules { Name = "Orphan Game", Paths = ["<winAppData>/Orphan Game*"] };
             var orphanGame = new Game { Id = "223456789012345678", Name = "Orphan Game" };
             var libraryFinder = new SaveFinder(new SaveCatalog { SchemaVersion = 1, Games = [rule, orphanRule] }, environment);
             var orphanScan = await libraryFinder.FindOrphansAsync([game, orphanGame], new HashSet<string> { game.Id });
             Check(orphanScan.Matches.Length == 1 && orphanScan.Matches[0].Game.Id == orphanGame.Id, "save center separates preserved saves from installed games");
-            var library = new SaveLibraryService(libraryFinder, _ => new Dictionary<string, string[]> { [game.Id] = [install] });
+            string cachePath = Path.Combine(testRoot, "save-library.json");
+            var library = new SaveLibraryService(libraryFinder, _ => new Dictionary<string, string[]> { [game.Id] = [install] }, cachePath);
             var dashboard = await library.ScanAsync([game, orphanGame]);
             Check(dashboard.InstalledCount == 1 && dashboard.OrphanCount == 1 && dashboard.WithSavesCount == 2 && dashboard.FileCount > 0, "save center summarizes installed and orphaned saves separately");
+            var reopened = new SaveLibraryService(new SaveFinder(new SaveCatalog { SchemaVersion = 1, Games = [rule, orphanRule] }, environment), _ => new Dictionary<string, string[]> { [game.Id] = [install] }, cachePath);
+            var cachedDashboard = reopened.LoadCached();
+            Check(cachedDashboard is { FromCache: true } && cachedDashboard.Games.Length == dashboard.Games.Length, "save center restores its previous result without running another full search");
             string exportRoot = Folder("Exports");
             var folderExport = await library.ExportAsync([game, orphanGame], exportRoot, false);
             Check(folderExport.Selected && Directory.Exists(folderExport.Path) && File.Exists(Path.Combine(folderExport.Path!, "manifest.json")), "organized folder backup includes a manifest");
+            using (var exportedManifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(folderExport.Path!, "manifest.json")))) Check(exportedManifest.RootElement.GetProperty("schemaVersion").GetInt32() == 2 && exportedManifest.RootElement.GetProperty("games")[0].GetProperty("locations")[0].TryGetProperty("originalPath", out _), "backup manifest retains safe source mapping for later restoration");
             var zipExport = await library.ExportAsync([game, orphanGame], exportRoot, true);
             Check(zipExport.Selected && File.Exists(zipExport.Path) && new FileInfo(zipExport.Path!).Length > 0, "zip backup is created as a separate portable archive");
             Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(save))) == originalHash, "backup leaves original save contents unchanged");
+            var restore = new SaveRestoreService(library, [game, orphanGame], Path.Combine(testRoot, "RestoreData"));
+            var analysis = await restore.AnalyzeAsync(folderExport.Path!);
+            Check(analysis.ReadyGames >= 1 && analysis.Files > 0 && analysis.Conflicts > 0, "restore analysis finds current destinations and reports conflicts before copying");
+            File.WriteAllText(save, "newer local save");
+            analysis = await restore.AnalyzeAsync(folderExport.Path!);
+            var merged = await restore.RestoreAsync(analysis.Token, "merge");
+            Check(File.ReadAllText(save) == "newer local save" && merged.PreservedConflicts > 0 && Directory.Exists(merged.PendingPath), "safe merge preserves newer local saves and separates conflicting backup files");
+            analysis = await restore.AnalyzeAsync(folderExport.Path!);
+            var replaced = await restore.RestoreAsync(analysis.Token, "replace");
+            Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(save))) == originalHash && File.Exists(replaced.RollbackPath), "replacement restores backup data only after creating a rollback ZIP");
+            var emptyLibrary = new SaveLibraryService(new SaveFinder(new SaveCatalog { SchemaVersion = 1, Games = [rule, orphanRule] }, environment), _ => []);
+            var pendingRestore = new SaveRestoreService(emptyLibrary, [game, orphanGame], Path.Combine(testRoot, "PendingData"));
+            var pendingAnalysis = await pendingRestore.AnalyzeAsync(zipExport.Path!);
+            var pendingResult = await pendingRestore.RestoreAsync(pendingAnalysis.Token, "merge");
+            Check(pendingAnalysis.PendingGames > 0 && pendingResult.PendingFiles > 0 && Directory.Exists(pendingResult.PendingPath), "restore safely keeps saves pending when games have not created their destination folders");
+            string movedOrphan = Path.Combine(roaming, "Orphan Game Moved"); Directory.Move(orphanFolder, movedOrphan);
+            var afterMove = await reopened.ValidateCachedAsync([game, orphanGame]);
+            Check(afterMove.Changes?.Any(change => change.GameId == orphanGame.Id && change.Type == "moved") == true, "fast validation recovers and records a save moved to another known location");
+            Directory.Delete(movedOrphan, true);
+            var afterDelete = await reopened.ValidateCachedAsync([game, orphanGame]);
+            Check(afterDelete.Changes?.Any(change => change.GameId == orphanGame.Id && change.Type == "removed") == true, "fast validation records a save location that was deleted");
             string deep = Folder("Deep"); for (int i = 0; i < 11; i++) { deep = Path.Combine(deep, "level"); Directory.CreateDirectory(deep); }
             var limitedRule = new SaveGameRules { Name = "Deep", Paths = ["<home>/Deep/**/never.sav"] };
             var limited = await new SaveFinder(new SaveCatalog { SchemaVersion = 1, Games = [limitedRule] }, environment).FindAsync(new Game { Name = "Deep" });
