@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, Archive, ArrowRight, CalendarClock, CheckCircle2, Clock3, Download, FolderArchive, FolderOpen, HardDrive, LoaderCircle, MoveRight, RefreshCw, Search, ShieldCheck, Trash2, UploadCloud } from "lucide-react";
+import { Activity, AlertTriangle, Archive, ArrowRight, CalendarClock, CheckCircle2, Clock3, Download, FolderArchive, FolderOpen, HardDrive, LoaderCircle, MoveRight, RefreshCw, Search, ShieldCheck, Trash2, UploadCloud, Wrench } from "lucide-react";
 import { request } from "./bridge";
 import { translate, useI18n } from "./i18n";
 import "./save-center.css";
@@ -51,6 +51,7 @@ export function SaveCenter({ preview, onInspect }: { preview: boolean; onInspect
   const [restored, setRestored] = useState<RestoreResult | null>(null);
   const [restoreMode, setRestoreMode] = useState<"merge" | "replace">("merge");
   const [restoreBusy, setRestoreBusy] = useState(false);
+  const [fixGuide, setFixGuide] = useState(preview);
 
   useEffect(() => {
     let active = true;
@@ -183,7 +184,12 @@ export function SaveCenter({ preview, onInspect }: { preview: boolean; onInspect
         <div className="save-health-card"><ShieldCheck size={18} /><span><strong>Originais protegidos</strong><small>A Central apenas lê metadados. Nada é movido ou excluído.</small></span></div>
       </div>
       <div className="save-restore-card">
-        <div className="save-restore-intro"><span className="save-restore-icon"><UploadCloud size={18} /></span><span><strong>Reinserir saves de um backup</strong><small>Analise um ZIP ou uma pasta antes de devolver os arquivos aos jogos.</small></span><div><button className="button ghost small" disabled={preview || restoreBusy} onClick={() => void recheckPending()}><RefreshCw size={14} /> Rever pendentes</button><button className="button secondary small" disabled={preview || restoreBusy} onClick={() => void chooseRestore("saves.restore.chooseFolder")}><FolderOpen size={14} /> Pasta</button><button className="button secondary small" disabled={preview || restoreBusy} onClick={() => void chooseRestore("saves.restore.chooseZip")}>{restoreBusy ? <LoaderCircle className="spin" size={14} /> : <Download size={14} />} Selecionar ZIP</button></div></div>
+        <div className="save-restore-intro"><span className="save-restore-icon"><UploadCloud size={18} /></span><span><strong>Reinserir saves de um backup</strong><small>Analise um ZIP ou uma pasta antes de devolver os arquivos aos jogos.</small></span><div><button className={`button small save-fix-button ${fixGuide ? "is-open" : ""}`} disabled={preview || restoreBusy} onClick={() => setFixGuide(value => !value)}><Wrench size={14} /> Fix de perfil</button><button className="button secondary small" disabled={preview || restoreBusy} onClick={() => void chooseRestore("saves.restore.chooseFolder")}><FolderOpen size={14} /> Pasta</button><button className="button secondary small" disabled={preview || restoreBusy} onClick={() => void chooseRestore("saves.restore.chooseZip")}>{restoreBusy ? <LoaderCircle className="spin" size={14} /> : <Download size={14} />} Selecionar ZIP</button></div></div>
+        {fixGuide && <div className="save-fix-guide">
+          <span className="save-fix-guide-icon"><Wrench size={17} /></span>
+          <div><strong>Fix de perfil e pasta de save</strong><small>Use quando um jogo reinstalado não reconhecer o backup ou criar outro identificador. O Mirage primeiro confere se o save já funciona; a correção só é oferecida quando a pasta realmente mudou.</small><div className="save-fix-cases"><span><i>1</i> Se já funciona, não altera</span><span><i>2</i> Se falta a pasta, aguarda</span><span><i>3</i> Se o perfil mudou, corrige</span></div></div>
+          <div className="save-fix-actions"><button className="button ghost small" disabled={restoreBusy} onClick={() => void recheckPending()}><RefreshCw size={14} /> Rever pendentes</button><button className="button secondary small" disabled={restoreBusy} onClick={() => void chooseRestore("saves.restore.chooseZip")}><Download size={14} /> Analisar backup</button></div>
+        </div>}
         <div className="save-restore-warning"><AlertTriangle size={14} /><span><strong>Depois de formatar ou reinstalar um jogo, abra-o e crie um save uma vez.</strong><small>Alguns jogos geram uma nova pasta, um novo perfil ou outro identificador. O Mirage prioriza a pasta atual e avisa quando só encontra o caminho antigo.</small></span></div>
         {restore && <div className="save-restore-analysis">
           {storedFlow && <div className={`restore-flow-state ${waitingOnly ? "is-waiting" : readyForInsertion ? "is-ready" : "is-current"}`}>
