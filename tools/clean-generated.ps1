@@ -32,6 +32,7 @@ function Remove-Generated([string]$Path) {
 }
 # Explicit generated directories only. Source code, releases in use, dist and user data are retained.
 foreach ($relative in @('backups','work','qa-results','source\bin','source\obj','source\Tests\bin','source\Tests\obj','source\Frontend\node_modules','source\Frontend\dist','tools\sandbox','tools\__pycache__','tools\tests\__pycache__')) { Remove-Generated (Join-Path $projectRoot $relative) }
+Remove-Generated (Join-Path $projectRoot 'source\Worker\Mirage.Worker.exe')
 Get-ChildItem -LiteralPath $projectRoot -Directory | Where-Object { $_.Name -match '^release-\d+(\.\d+){1,2}$' } | ForEach-Object { Remove-Generated $_.FullName }
 Get-ChildItem -LiteralPath $projectRoot -File | Where-Object { $_.Name -match '^preview([-.]|\.)' -or $_.Name -match '^Mirage-running-[\w.\-]+\.exe$' -or $_.Name -in @('Mirage.pdb','probe.txt') } | ForEach-Object { Remove-Generated $_.FullName }
 $currentVersion = if (Test-Path -LiteralPath $rootExecutable) { [version](Get-Item -LiteralPath $rootExecutable).VersionInfo.ProductVersion.Split('+')[0] } else { [version]([xml](Get-Content -LiteralPath (Join-Path $projectRoot 'source\Mirage.csproj') -Raw)).Project.PropertyGroup.Version }
