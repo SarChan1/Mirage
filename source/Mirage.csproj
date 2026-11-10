@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Mirage</AssemblyName>
+    <Version>1.0.0</Version>
+    <Description>Mirage — sequências locais de processos para jogos.</Description>
+    <ApplicationIcon>mirage.ico</ApplicationIcon>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Frontend/node_modules/**;Frontend/dist/**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+    <Compile Remove="Frontend/**/*" />
+    <None Remove="Frontend/node_modules/**/*" />
+    <EmbeddedResource Include="catalog.json" />
+    <EmbeddedResource Include="catalog.saves.json" LogicalName="Mirage.catalog.saves.json" />
+    <Resource Include="mirage.ico" />
+    <Compile Remove="Tests/**/*.cs" />
+    <EmbeddedResource Remove="Tests/**/*" />
+    <None Remove="Tests/**/*" />
+    <Compile Remove="Worker/**/*.cs" />
+    <EmbeddedResource Include="Worker/Mirage.Worker.exe" LogicalName="Mirage.ProcessWorker.exe" />
+  </ItemGroup>
+  <ItemGroup><ReactSource Include="Frontend/src/**/*;Frontend/index.html;Frontend/vite.config.js;Frontend/tsconfig.json;Frontend/package.json;Frontend/package-lock.json;Frontend/public/**/*" /></ItemGroup>
+  <Target Name="RestoreReactUi" Inputs="Frontend/package.json;Frontend/package-lock.json" Outputs="Frontend/node_modules/.package-lock.json" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(MSBuildProjectDirectory)/Frontend" />
+  </Target>
+  <Target Name="BuildReactUi" DependsOnTargets="RestoreReactUi" Inputs="@(ReactSource)" Outputs="Frontend/dist/.mirage-build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)/Frontend" />
+    <Touch Files="Frontend/dist/.mirage-build" AlwaysCreate="true" />
+  </Target>
+  <Target Name="CollectReactUi" BeforeTargets="AssignTargetPaths" DependsOnTargets="BuildReactUi" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_WebResource Include="Frontend/dist/**/*" Exclude="Frontend/dist/.mirage-build" />
+      <EmbeddedResource Include="@(_WebResource)" LogicalName="Mirage.Web/%(_WebResource.RecursiveDir)%(_WebResource.Filename)%(_WebResource.Extension)" />
+    </ItemGroup>
+  </Target>
+  <Target Name="CompileProcessWorker" BeforeTargets="PrepareForBuild" Inputs="Worker/Program.cs" Outputs="Worker/Mirage.Worker.exe">
+    <Exec Command="&quot;$(WINDIR)\Microsoft.NET\Framework64\v4.0.30319\csc.exe&quot; /nologo /target:winexe /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /out:&quot;$(MSBuildProjectDirectory)\Worker\Mirage.Worker.exe&quot; &quot;$(MSBuildProjectDirectory)\Worker\Program.cs&quot;" />
+  </Target>
+</Project>

@@ -1,0 +1,69 @@
+name: Compilar Mirage para Windows
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir versão da tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content source/Mirage.csproj
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw "A tag deve corresponder à versão do projeto: v$version" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Testar geração do catálogo de saves
+        run: |
+          python -m pip install -r tools/requirements-saves.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tools/tests -p 'test_*.py'
+      - name: Testes do catálogo e interface
+        run: |
+          npm --prefix source/Frontend test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project source/Tests/Mirage.Tests.csproj -c Release -- --workspace
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project source/Tests/Mirage.Tests.csproj -c Release --no-build -- --library
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project source/Tests/Mirage.Tests.csproj -c Release --no-build -- --controller
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project source/Tests/Mirage.Tests.csproj -c Release --no-build -- --saves
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project source/Tests/Mirage.Tests.csproj -c Release --no-build -- --ui-models
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project source/Tests/Mirage.Tests.csproj -c Release --no-build -- --preferences
+      - name: Gerar aplicativo
+        shell: pwsh
+        run: dotnet publish source/Mirage.csproj -c Release -r win-x64 --self-contained true -o work/release
+      - name: Gerar instalador e pacote portátil
+        shell: pwsh
+        run: ./tools/build-installer.ps1 -PublishDir work/release -OutputDir dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mirage-Windows
+          path: |
+            work/release/Mirage.exe
+            dist/*
+      - name: Publicar distribuição na versão
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem dist -File | ForEach-Object FullName
+          gh release create "$env:GITHUB_REF_NAME" @files --generate-notes

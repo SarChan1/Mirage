@@ -1,0 +1,48 @@
+name: Verificar Mirage
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: source/Frontend/package-lock.json
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Instalar interface
+        run: npm --prefix source/Frontend ci
+      - name: Testar interface
+        run: npm --prefix source/Frontend test
+      - name: Testar controlador
+        run: dotnet run --project source/Tests/Mirage.Tests.csproj -c Release -- --controller
+      - name: Testar biblioteca
+        run: dotnet run --project source/Tests/Mirage.Tests.csproj -c Release --no-build -- --library
+      - name: Testar sequências
+        run: dotnet run --project source/Tests/Mirage.Tests.csproj -c Release --no-build -- --workspace
+      - name: Testar saves e preferências
+        shell: pwsh
+        run: |
+          dotnet run --project source/Tests/Mirage.Tests.csproj -c Release --no-build -- --saves
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project source/Tests/Mirage.Tests.csproj -c Release --no-build -- --ui-models
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project source/Tests/Mirage.Tests.csproj -c Release --no-build -- --preferences
+      - name: Compilar aplicativo
+        run: dotnet build source/Mirage.csproj -c Release --no-restore

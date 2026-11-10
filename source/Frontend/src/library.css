@@ -1,0 +1,394 @@
+.library-options {
+  position: fixed;
+  z-index: 85;
+  width: 250px;
+  padding: 12px;
+  border: 1px solid #ffffff1b;
+  border-radius: 8px;
+  background: #242428;
+  box-shadow: 0 12px 35px #0006;
+}
+.display-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.display-heading strong {
+  font-size: 11px;
+  color: #d5d1df;
+  font-weight: 500;
+}
+.library-options select {
+  width: 100%;
+  padding: 8px 9px;
+  font-size: 11px;
+}
+.display-filter-group {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.display-filter-group label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #bcb6ca;
+  font-size: 11px;
+  cursor: pointer;
+}
+.display-reset {
+  display: block;
+  width: 100%;
+  margin-top: 17px;
+  border-top: 1px solid #ffffff0c;
+  padding: 11px 0 0;
+  background: transparent;
+  text-align: left;
+  color: #a9a0bf;
+  font-size: 10px;
+}
+.display-trigger.active {
+  color: #c4b9ee;
+}
+.display-trigger > span {
+  width: 4px;
+  height: 4px;
+  border-radius: 100%;
+  background: #a49cf5;
+}
+.library-select-mode[aria-pressed="true"] {
+  color: #c5b9f1;
+  background: #a49cf50c;
+}
+.library-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 0 0 13px;
+  flex-shrink: 0;
+}
+.library-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 7px;
+  font-size: 9px;
+  border: 1px solid #a49cf522;
+  background: #a49cf509;
+  border-radius: 5px;
+  color: #b8adce;
+}
+.library-chips button:hover {
+  background: #a49cf514;
+}
+.library-chips .clear-library-filters {
+  color: #99909f;
+  border-color: transparent;
+  background: transparent;
+}
+.batch-composer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #a49cf52b;
+  border-radius: 7px;
+  background: #a49cf508;
+  padding: 9px 10px;
+  margin: 0 8px 15px 0;
+  flex-shrink: 0;
+}
+.batch-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 125px;
+  color: #bab0d0;
+  background: transparent;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.batch-count strong {
+  color: #ddd3f4;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.batch-count:hover {
+  color: #e1d7f3;
+}
+.batch-composer .mark-displayed {
+  padding: 6px;
+  font-size: 10px;
+}
+.batch-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+.batch-duration {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.batch-duration input {
+  width: 42px;
+  padding: 5px 2px;
+  text-align: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.batch-duration span {
+  color: #9c92ac;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.selection-limit {
+  width: 100%;
+  color: #dab2bd;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.card-batch-toggle {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #ffffff77;
+  border-radius: 5px;
+  color: #fff;
+  background: #1c1925d9;
+  box-shadow: 0 1px 4px #0004;
+}
+.card-batch-toggle.checked {
+  background: #8375cf;
+  border-color: #c6b6ff88;
+}
+.card-batch-toggle:disabled {
+  opacity: 0.4;
+}
+.game-card.is-batch-selected {
+  border-color: #a49cf5af;
+  background: #282333;
+}
+.game-card.compact.is-batch-selected {
+  border-color: #a49cf56a;
+  background: #a49cf50e;
+}
+.card-queue-badge {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 23px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: #17171cde;
+  color: #d7cbed;
+  font-size: 10px;
+  pointer-events: none;
+}
+.card-queue-badge.with-favorite {
+  right: 38px;
+}
+.compact .card-batch-toggle {
+  top: 8px;
+  left: 7px;
+  width: 19px;
+  height: 19px;
+}
+.compact .card-queue-badge {
+  top: 19px;
+  right: 41px;
+}
+.compact:has(.card-queue-badge) .card-favorite {
+  right: 84px;
+}
+.compact:has(.card-queue-badge) .card-select {
+  padding-right: 108px;
+}
+.batch-review-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 47vh;
+  overflow: auto;
+  margin-top: 17px;
+  padding-right: 4px;
+}
+.batch-review-list > div {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 0;
+  border-bottom: 1px solid #ffffff0c;
+}
+.batch-review-index {
+  color: #92889d;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.batch-review-list strong {
+  flex: 1;
+  min-width: 0;
+  color: #d5cbdf;
+  font-size: 11px;
+  line-height: 1.6;
+  font-weight: 500;
+}
+.selection-counter {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: #9e94b0;
+}
+.selection-intro {
+  padding: 6px 0 18px;
+  border-bottom: 1px solid #ffffff0d;
+  margin-bottom: 5px;
+}
+.selection-intro > svg {
+  color: #aaa0ce;
+  margin-bottom: 16px;
+}
+.selection-intro h2 {
+  font-size: 20px;
+  line-height: 1.35;
+  letter-spacing: -0.5px;
+  font-weight: 500;
+  color: #e2dbed;
+}
+.selection-intro p {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #a399af;
+  margin-top: 9px;
+}
+.selection-game-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.selection-game-list > li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 0;
+  border-bottom: 1px solid #ffffff0a;
+}
+.selection-game-index {
+  color: #8d849e;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.selection-game-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 30px;
+  width: 28px;
+  background: #302a39;
+  color: #a198af;
+  border-radius: 4px;
+  flex-shrink: 0;
+  overflow: hidden;
+  font-size: 11px;
+}
+.selection-game-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.selection-game-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #cec5dd;
+}
+.selection-game-list .icon-button {
+  width: 22px;
+}
+.selection-summary {
+  flex-shrink: 0;
+  padding: 16px 0 5px;
+  border-top: 1px solid #ffffff10;
+  margin-top: 12px;
+}
+.selection-time {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  color: #aaa0ba;
+}
+.selection-time > span:last-child {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.selection-time input {
+  width: 49px;
+  padding: 7px 3px;
+  text-align: center;
+  font-size: 13px;
+  color: #dfd4f4;
+  font-variant-numeric: tabular-nums;
+}
+.selection-time small {
+  font-size: 10px;
+  color: #978ca6;
+}
+.selection-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 19px 0;
+}
+.selection-total > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  color: #a79cb6;
+}
+.selection-total > strong {
+  font-weight: 450;
+  font-size: 19px;
+  letter-spacing: -0.5px;
+  color: #d9ccee;
+}
+.selection-summary .selection-limit {
+  margin: 0 0 12px;
+}
+.selection-summary .queue-link {
+  padding-top: 4px;
+}
+@media (max-width: 1250px) {
+  .collection-actions {
+    gap: 6px;
+  }
+  .collection-actions .button {
+    padding: 6px;
+    font-size: 10px;
+  }
+  .batch-composer {
+    gap: 5px;
+  }
+  .batch-controls {
+    flex: 1;
+  }
+}

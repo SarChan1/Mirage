@@ -1,0 +1,31 @@
+# Mirage para Windows
+
+O instalador funciona no Windows 10/11 de 64 bits. A instalação é feita na conta atual, em `%LOCALAPPDATA%\Programs\Mirage`, com atalho no menu Iniciar e opção de atalho na área de trabalho. Para remover, use Aplicativos instalados no Windows.
+
+O .NET e a interface já acompanham o app. Quando o Microsoft WebView2 ainda não está instalado, o instalador usa o bootstrapper oficial da Microsoft para obtê-lo; essa etapa precisa de internet.
+
+Favoritos, preferências e sequências ficam em `%LOCALAPPDATA%\Mirage`. Atualizar ou desinstalar preserva esses dados. Para atualizar, encerre o Mirage pelo ícone próximo ao relógio.
+
+## Localizar saves
+
+Selecione um jogo na biblioteca e clique em **Localizar saves** no painel de detalhes. A busca consulta locais mapeados para Windows e mostra os que existem neste computador. Ela reconhece instalações Steam, Epic e pastas registradas no Windows; o botão **Escolher pasta do jogo** permite indicar outras instalações.
+
+Os caminhos mapeados vêm do Ludusavi Manifest, distribuído sob licença MIT. O app também procura pastas locais comuns e perfis alternativos, exibidos como **Possível save**. Esses candidatos precisam ser conferidos pelo usuário. A busca não lê o conteúdo dos saves; somente uma exportação iniciada pelo usuário copia os arquivos para o destino escolhido. Nada é enviado a servidores.
+
+## Central de saves
+
+A Central de saves separa jogos instalados de saves órfãos que permaneceram depois da remoção de um jogo. Ela apresenta datas, quantidade de arquivos e tamanho estimado. O usuário pode criar uma cópia organizada em pasta ou um ZIP no local que escolher. A exportação apenas copia arquivos existentes; os originais não são movidos, substituídos ou apagados.
+
+Um jogo instalado pode ainda não ter saves, e versões modificadas podem usar caminhos diferentes. A busca não garante encontrar todos os jogos, contas ou formatos. Saves também podem permanecer depois de desinstalar um jogo. Parte dos padrões de localização ainda não é suportada.
+
+As licenças dos componentes acompanham os recursos da interface. As regras de localização de saves são derivadas do Ludusavi Manifest: https://github.com/mtkennerly/ludusavi-manifest
+
+O Mirage usa somente o modo por processo e não exige configuração de chave de API.
+
+## Compilar a distribuição
+
+```
+pwsh -File tools/build-installer.ps1
+```
+
+O script usa um compilador Inno Setup existente, ou o pacote portátil de desenvolvimento fixado no script. Não instala o compilador no sistema. O resultado inclui o instalador, o ZIP portátil e seus checksums na pasta `dist`.

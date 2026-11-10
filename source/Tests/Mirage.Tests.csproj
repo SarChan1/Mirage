@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup><Compile Include="../Models.cs" Link="Models.cs"/><Compile Include="../CatalogService.cs" Link="CatalogService.cs"/><Compile Include="../ProcessSession.cs" Link="ProcessSession.cs"/><Compile Include="../ProcessPlaylist.cs" Link="ProcessPlaylist.cs"/><EmbeddedResource Include="../Worker/Mirage.Worker.exe" LogicalName="Mirage.ProcessWorker.exe"/><EmbeddedResource Include="../catalog.json" LogicalName="Mirage.catalog.json"/></ItemGroup>
+  <Target Name="CompileProcessWorker" BeforeTargets="PrepareForBuild" Inputs="../Worker/Program.cs" Outputs="../Worker/Mirage.Worker.exe"><Exec Command="&quot;$(WINDIR)\Microsoft.NET\Framework64\v4.0.30319\csc.exe&quot; /nologo /target:winexe /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /out:&quot;$(MSBuildProjectDirectory)\..\Worker\Mirage.Worker.exe&quot; &quot;$(MSBuildProjectDirectory)\..\Worker\Program.cs&quot;" /></Target>
+  <ItemGroup><Compile Include="../PlaylistWorkspace.cs" Link="PlaylistWorkspace.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../LibraryTools.cs" Link="LibraryTools.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Preferences.Storage.cs" Link="Preferences.Storage.cs" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="../SaveFinder.cs" Link="SaveFinder.cs" />
+    <Compile Include="../SaveLibraryService.cs" Link="SaveLibraryService.cs" />
+    <EmbeddedResource Include="../catalog.saves.json" LogicalName="Mirage.catalog.saves.json" />
+    <Compile Include="../MirageController.cs" Link="MirageController.cs" />
+    <Compile Include="../MirageController.Commands.cs" Link="MirageController.Commands.cs" />
+  </ItemGroup>
+</Project>
