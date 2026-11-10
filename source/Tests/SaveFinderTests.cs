@@ -80,9 +80,10 @@ internal static class SaveFinderTests
             Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(save))) == originalHash, "backup leaves original save contents unchanged");
             var restore = new SaveRestoreService(library, [game, orphanGame], Path.Combine(testRoot, "RestoreData"));
             var analysis = await restore.AnalyzeAsync(folderExport.Path!);
-            Check(analysis.ReadyGames >= 1 && analysis.Files > 0 && analysis.Conflicts > 0, "restore analysis finds current destinations and reports conflicts before copying");
+            Check(analysis.CurrentGames >= 1 && analysis.Files > 0 && analysis.Conflicts == 0 && analysis.Games.Any(item => item.Status == "current" && !item.ProfileMigration), "restore analysis recognizes identical saves that already work and offers no unnecessary fix");
             File.WriteAllText(save, "newer local save");
             analysis = await restore.AnalyzeAsync(folderExport.Path!);
+            Check(analysis.Conflicts > 0, "restore analysis distinguishes a changed local save from an identical working save");
             var merged = await restore.RestoreAsync(analysis.Token, "merge");
             Check(File.ReadAllText(save) == "newer local save" && merged.PreservedConflicts > 0 && Directory.Exists(merged.PendingPath), "safe merge preserves newer local saves and separates conflicting backup files");
             analysis = await restore.AnalyzeAsync(folderExport.Path!);
@@ -96,7 +97,7 @@ internal static class SaveFinderTests
             Check(File.Exists(Path.Combine(pendingResult.PendingPath!, "manifest.json")), "pending saves retain a portable manifest for automatic retry later");
             var pendingResolver = new SaveRestoreService(library, [game, orphanGame], Path.Combine(testRoot, "PendingData"));
             var retriedPending = await pendingResolver.AnalyzeLatestPendingAsync();
-            Check(retriedPending is { ReadyGames: > 0, PendingPackage: true }, "pending restoration is rediscovered after the game creates a destination");
+            Check(retriedPending is { PendingPackage: true, CurrentGames: > 0 } && retriedPending.ProfileMigrations == 0, "a recreated original destination with identical saves is recognized as already working without a profile fix");
             await pendingResolver.RestoreAsync(retriedPending!.Token, "merge");
             Check(File.Exists(Path.Combine(pendingResult.PendingPath!, ".completed")), "a retried pending package is marked complete instead of being offered repeatedly");
             string crimsonOld = Folder(@"Roaming\Pearl Abyss\CD\save\6183201944"); File.WriteAllText(Path.Combine(crimsonOld, "slot.sav"), "crimson backup");

@@ -20,6 +20,8 @@ O usuário pode criar uma cópia organizada em pasta ou um ZIP no local que esco
 
 Depois de reinstalar um jogo, recomenda-se abri-lo e criar um save uma vez: alguns títulos geram uma pasta, um perfil ou identificador novo somente nessa etapa. O Mirage reconhece identificadores variáveis, compara o caminho antigo com os perfis atuais e oferece a pasta nova compatível como destino. Enquanto ela não existir, a reinserção permanece pendente em vez de recriar o perfil antigo. A Central reavalia esses pacotes ao ser aberta novamente ou pelo botão **Rever pendentes**. A exportação apenas copia arquivos existentes; os originais não são movidos, substituídos ou apagados.
 
+Nem toda reinstalação exige correção. Se o jogo reutilizar a mesma pasta e os arquivos guardados já estiverem presentes e idênticos, a Central mostra **Os saves já funcionam** e não altera nada. Uma inserção comum é oferecida quando o destino correto existe, mas ainda faltam arquivos. A opção de correção aparece somente quando há evidência de mudança entre o perfil antigo e o perfil atual.
+
 Um jogo instalado pode ainda não ter saves, e versões modificadas podem usar caminhos diferentes. A busca não garante encontrar todos os jogos, contas ou formatos. Saves também podem permanecer depois de desinstalar um jogo. Parte dos padrões de localização ainda não é suportada.
 
 As licenças dos componentes acompanham os recursos da interface. As regras de localização de saves são derivadas do Ludusavi Manifest: https://github.com/mtkennerly/ludusavi-manifest

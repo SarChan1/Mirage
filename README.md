@@ -55,6 +55,8 @@ O destino do backup sempre é escolhido pelo usuário. A busca e o backup não e
 
 Alguns jogos criam uma pasta, perfil ou identificador novo somente depois da primeira execução ou do primeiro save. Após formatar o computador ou reinstalar um jogo, abra-o e salve uma vez antes de restaurar. O Mirage compara a estrutura dos caminhos, identifica a pasta de perfil atual e pode encaixar nela o conteúdo do perfil antigo. Se o destino novo ainda não existir, o pacote fica pendente e é reavaliado ao retornar à Central; o app não recria silenciosamente o identificador obsoleto. Como jogos modificados podem usar caminhos próprios, confira os resultados antes de depender de um backup.
 
+A reinserção diferencia três situações: se o mesmo destino voltou e os arquivos já são idênticos, o Mirage informa que o save já funciona e não oferece correção; se o destino existe, mas faltam arquivos, oferece uma inserção normal; somente quando a pasta ou o identificador mudou é exibida a correção de perfil. Sem o jogo instalado, os arquivos permanecem protegidos em `Imported Saves` até um destino atual ser reconhecido.
+
 ## Requisitos para usar
 
 - Windows 10 ou Windows 11 de 64 bits.

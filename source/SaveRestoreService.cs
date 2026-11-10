@@ -9,8 +9,8 @@ using System.Threading.Tasks;
 
 namespace Mirage;
 
-public sealed record SaveRestoreGame(string GameId, string Name, string Status, string? Target, bool Installed, int Files, long SizeBytes, int Conflicts, string Note, bool ProfileMigration = false, string? PreviousPath = null);
-public sealed record SaveRestoreAnalysis(string Token, string SourceName, DateTimeOffset? CreatedAt, SaveRestoreGame[] Games, int Files, long SizeBytes, int ReadyGames, int PendingGames, int Conflicts, bool Legacy, int ProfileMigrations = 0, bool PendingPackage = false);
+public sealed record SaveRestoreGame(string GameId, string Name, string Status, string? Target, bool Installed, int Files, long SizeBytes, int Conflicts, string Note, bool ProfileMigration = false, string? PreviousPath = null, int IdenticalFiles = 0);
+public sealed record SaveRestoreAnalysis(string Token, string SourceName, DateTimeOffset? CreatedAt, SaveRestoreGame[] Games, int Files, long SizeBytes, int ReadyGames, int PendingGames, int Conflicts, bool Legacy, int ProfileMigrations = 0, bool PendingPackage = false, int CurrentGames = 0);
 public sealed record SaveRestoreResult(int RestoredFiles, int PreservedConflicts, int PendingFiles, string? RollbackPath, string? PendingPath, SaveRestoreAnalysis Analysis);
 
 public sealed class SaveRestoreService
@@ -38,6 +38,8 @@ public sealed class SaveRestoreService
         var usedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var statesForGames = new List<RestoreGameState>(); var summaries = new List<SaveRestoreGame>();
         int totalFiles = 0, totalConflicts = 0; long totalBytes = 0;
+        long comparisonBudget = 512L * 1024 * 1024;
+        using var analysisArchive = zip ? ZipFile.OpenRead(source) : null;
         foreach (var item in parsed.Games.Take(500)) {
             var game = FindGame(item.Id, item.Name);
             string id = game?.Id ?? item.Id ?? "legacy-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(item.Name)))[..16].ToLowerInvariant();
@@ -53,19 +55,39 @@ public sealed class SaveRestoreService
                 locations.Add(new(sourceLocation.BackupPath, sourceLocation.OriginalPath, sourceLocation.Kind, target, files, target is not null && match.ProfileMigration));
             }
             int filesCount = locations.Sum(location => location.Files.Length); long bytes = locations.Sum(location => location.Files.Sum(file => file.Size));
-            int conflicts = locations.Sum(CountConflicts);
+            int existing = locations.Sum(CountConflicts), identical = 0;
+            foreach (var location in locations.Where(location => location.Target is not null)) foreach (var file in location.Files) {
+                string targetFile = TargetFile(location, file);
+                if (!File.Exists(targetFile) || !SameLength(targetFile, file.Size) || file.Size > comparisonBudget) continue;
+                comparisonBudget -= file.Size;
+                if (await SameContentAsync(analysisArchive, zip, file, targetFile)) identical++;
+            }
+            int conflicts = Math.Max(0, existing - identical);
             bool migration = locations.Any(location => location.ProfileMigration);
-            string status = locations.Count == 0 ? "invalid" : locations.All(location => location.Target is not null) ? (conflicts > 0 ? "conflict" : migration ? "migration" : "ready") : "pending";
-            string note = status switch { "pending" => installed ? "O jogo está instalado, mas ainda não criou uma pasta de saves reconhecível." : "O jogo não está instalado. Os arquivos serão guardados até você instalá-lo e criar um save.", "conflict" when migration => "Um perfil novo foi detectado e já possui saves. Escolha como tratar os conflitos.", "conflict" => "Já existem saves nesse destino. Você escolherá como tratar os conflitos.", "migration" => "Novo perfil detectado. Os saves serão encaixados na pasta atual mais compatível.", "invalid" => "Nenhum arquivo restaurável foi encontrado para este jogo.", _ => "Destino atual reconhecido e pronto para restauração." };
+            bool alreadyCurrent = filesCount > 0 && identical == filesCount;
+            string status = locations.Count == 0 ? "invalid" : alreadyCurrent ? "current" : locations.All(location => location.Target is not null) ? (conflicts > 0 ? "conflict" : migration ? "migration" : "ready") : "pending";
+            string note = status switch {
+                "pending" when parsed.PendingPackage && installed => "O backup está protegido. Abra o jogo e crie um save para ele gerar a pasta atual; depois verifique novamente.",
+                "pending" when parsed.PendingPackage => "O backup está protegido. Instale o jogo quando quiser; nenhum arquivo será devolvido ao caminho antigo.",
+                "pending" when installed => "O jogo está instalado, mas ainda não criou uma pasta atual. Ao continuar, o Mirage guardará este save para depois.",
+                "pending" => "O jogo não está instalado. Ao continuar, o Mirage guardará este save até existir um destino atual.",
+                "conflict" when migration => "Uma pasta de perfil nova foi detectada e já possui saves. A correção pode mesclar ou preservar os conflitos.",
+                "conflict" => "Já existem saves nesse destino. Você escolherá como tratar os conflitos.",
+                "migration" => "A pasta antiga mudou. Uma correção está disponível para inserir os saves no perfil atual.",
+                "current" => "Os saves já estão presentes e iguais na pasta atual. Nenhuma correção é necessária.",
+                "invalid" => "Nenhum arquivo restaurável foi encontrado para este jogo.",
+                _ => parsed.PendingPackage ? "A pasta atual foi encontrada. O save guardado está pronto para ser inserido." : "Destino atual reconhecido e pronto para restauração."
+            };
             statesForGames.Add(new(id, item.Name, installed, locations.ToArray()));
+            bool needsMigration = migration && !alreadyCurrent;
             string? primaryTarget = status == "pending" ? null : locations.FirstOrDefault(location => location.ProfileMigration)?.Target ?? locations.Select(location => location.Target).FirstOrDefault(target => target is not null);
-            summaries.Add(new(id, item.Name, status, primaryTarget, installed, filesCount, bytes, conflicts, note, migration, locations.FirstOrDefault(location => location.ProfileMigration)?.OriginalPath));
+            summaries.Add(new(id, item.Name, status, primaryTarget, installed, filesCount, bytes, conflicts, note, needsMigration, needsMigration ? locations.FirstOrDefault(location => location.ProfileMigration)?.OriginalPath : null, identical));
             totalFiles += filesCount; totalBytes += bytes; totalConflicts += conflicts;
         }
         if (totalFiles == 0) throw new InvalidDataException("O backup não contém arquivos de save restauráveis.");
         if (totalFiles > 100_000 || totalBytes > 20L * 1024 * 1024 * 1024) throw new InvalidDataException("O conteúdo do backup ultrapassa o limite seguro de restauração.");
         string token = Guid.NewGuid().ToString("N");
-        var analysis = new SaveRestoreAnalysis(token, Path.GetFileName(source.TrimEnd(Path.DirectorySeparatorChar)), parsed.CreatedAt, summaries.ToArray(), totalFiles, totalBytes, summaries.Count(game => game.Status is "ready" or "migration" or "conflict"), summaries.Count(game => game.Status == "pending"), totalConflicts, parsed.Legacy, summaries.Count(game => game.ProfileMigration), parsed.PendingPackage);
+        var analysis = new SaveRestoreAnalysis(token, Path.GetFileName(source.TrimEnd(Path.DirectorySeparatorChar)), parsed.CreatedAt, summaries.ToArray(), totalFiles, totalBytes, summaries.Count(game => game.Status is "ready" or "migration" or "conflict"), summaries.Count(game => game.Status == "pending"), totalConflicts, parsed.Legacy, summaries.Count(game => game.ProfileMigration), parsed.PendingPackage, summaries.Count(game => game.Status == "current"));
         states.Clear(); states[token] = new(token, source, zip, parsed.CreatedAt, parsed.Legacy, statesForGames.ToArray(), analysis);
         return analysis;
     }
@@ -280,12 +302,15 @@ public sealed class SaveRestoreService
     private static string UniqueEntry(HashSet<string> entries, string name) { string value = name.Replace('\\', '/'); if (entries.Add(value)) return value; string stem = Path.GetFileNameWithoutExtension(value), extension = Path.GetExtension(value); string? folder = Path.GetDirectoryName(value)?.Replace('\\', '/'); for (int i = 2; i < 10000; i++) { string candidate = (string.IsNullOrEmpty(folder) ? "" : folder + "/") + stem + "-" + i + extension; if (entries.Add(candidate)) return candidate; } throw new IOException("Não foi possível criar a cópia de segurança dos arquivos atuais."); }
 
     private static async Task<bool> SameContentAsync(ZipArchive? archive, RestoreState state, RestoreFile source, string target)
+        => await SameContentAsync(archive, state.Zip, source, target);
+    private static async Task<bool> SameContentAsync(ZipArchive? archive, bool zip, RestoreFile source, string target)
     {
-        await using var left = OpenSource(archive, state, source); await using var right = File.OpenRead(target);
+        await using var left = OpenSource(archive, zip, source); await using var right = File.OpenRead(target);
         byte[] a = new byte[64 * 1024], b = new byte[64 * 1024];
         while (true) { int an = await left.ReadAsync(a), bn = await right.ReadAsync(b); if (an != bn) return false; if (an == 0) return true; if (!a.AsSpan(0, an).SequenceEqual(b.AsSpan(0, bn))) return false; }
     }
-    private static Stream OpenSource(ZipArchive? archive, RestoreState state, RestoreFile source) => state.Zip ? (archive?.GetEntry(source.Source) ?? throw new InvalidDataException("Um arquivo esperado não existe mais no ZIP.")).Open() : File.OpenRead(source.Source);
+    private static Stream OpenSource(ZipArchive? archive, RestoreState state, RestoreFile source) => OpenSource(archive, state.Zip, source);
+    private static Stream OpenSource(ZipArchive? archive, bool zip, RestoreFile source) => zip ? (archive?.GetEntry(source.Source) ?? throw new InvalidDataException("Um arquivo esperado não existe mais no ZIP.")).Open() : File.OpenRead(source.Source);
     private static async Task CopySourceAsync(ZipArchive? archive, RestoreState state, RestoreFile source, string target, bool overwrite)
     {
         if (!overwrite && File.Exists(target)) return;
