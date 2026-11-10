@@ -74,10 +74,15 @@ public sealed partial class MirageController
     };
     public object SearchWeb(JsonElement args)
     {
-        string query = TextArg(args, "query")[..Math.Min(256, TextArg(args, "query").Length)];
+        string requestedQuery = TextArg(args, "query");
+        string query = requestedQuery[..Math.Min(256, requestedQuery.Length)];
         string collection = TextArg(args, "collection", "explore");
         int offset = Math.Clamp(IntArg(args, "offset"), 0, games.Count);
         int limit = Math.Clamp(IntArg(args, "limit", 60), 1, 120);
+        bool onlySequence = BoolArg(args, "onlySequence"), hideQueued = BoolArg(args, "hideQueued");
+        string sort = TextArg(args, "sort", "default");
+        if (collection == "explore" && string.IsNullOrWhiteSpace(query) && !onlySequence && !hideQueued && sort == "default")
+            return new { items = featured.Skip(offset).Take(limit).Select(WebGameData).ToArray(), total = featured.Length, hasMore = offset + limit < featured.Length };
         IEnumerable<Game> source = collection switch {
             "favorites" => games.Where(g => prefs.Favorites.Contains(g.Id)),
             "recent" => prefs.Recent.Select(id => gameById.GetValueOrDefault(id)).OfType<Game>(),
@@ -86,9 +91,9 @@ public sealed partial class MirageController
         };
         if (!string.IsNullOrWhiteSpace(query)) source = GameSearch.Find(source, query);
         else if (collection == "explore") source = featured;
-        if (BoolArg(args, "onlySequence")) source = source.Where(g => g.SupportsPlaylist);
-        if (BoolArg(args, "hideQueued")) { var queued = prefs.ProcessPlaylist.Select(item => item.GameId).ToHashSet(); source = source.Where(game => !queued.Contains(game.Id)); }
-        source = LibraryTools.Sort(source, TextArg(args, "sort", "default"));
+        if (onlySequence) source = source.Where(g => g.SupportsPlaylist);
+        if (hideQueued) { var queued = prefs.ProcessPlaylist.Select(item => item.GameId).ToHashSet(); source = source.Where(game => !queued.Contains(game.Id)); }
+        source = LibraryTools.Sort(source, sort);
         var matches = source.ToList();
         return new { items = matches.Skip(offset).Take(limit).Select(WebGameData).ToArray(), total = matches.Count, hasMore = offset + limit < matches.Count };
     }

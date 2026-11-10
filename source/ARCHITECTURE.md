@@ -8,6 +8,8 @@ Ao esconder ou minimizar a janela, a página é suspensa imediatamente. Após 15
 
 Ao restaurar, o catálogo local e a interface são recriados. Um snapshot pequeno em memória preserva a navegação. Nenhum estado visual é gravado em Documents.
 
+O carregamento inicial inclui apenas biblioteca, sequência e navegação. Central de saves, localizador, configurações e rotinas de diagnóstico são divididos em módulos carregados sob demanda. Recursos com nome versionado usam cache imutável; a página principal permanece revalidável. Em português, a interface não mantém um observador de tradução ativo porque o texto-fonte já está no idioma correto.
+
 ## Dados e rede
 
 - Preferências: `%LOCALAPPDATA%\Mirage\preferences.json`, com escrita atômica e confirmação antes de substituir arquivo ilegível.

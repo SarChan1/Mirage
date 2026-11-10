@@ -123,6 +123,8 @@ public sealed partial class WebWindow : Window
             core.Settings.AreHostObjectsAllowed = false;
             core.Settings.AreDefaultContextMenusEnabled = false;
             core.Settings.AreDevToolsEnabled = PreviewOnly;
+            core.Settings.IsGeneralAutofillEnabled = false;
+            core.Settings.IsPasswordAutosaveEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.IsZoomControlEnabled = false;
             core.Settings.IsNonClientRegionSupportEnabled = true;
@@ -166,7 +168,8 @@ public sealed partial class WebWindow : Window
         string type = Path.GetExtension(path).ToLowerInvariant() switch {
             ".html" => "text/html; charset=utf-8", ".js" => "text/javascript; charset=utf-8", ".css" => "text/css; charset=utf-8", ".svg" => "image/svg+xml", ".woff2" => "font/woff2", ".woff" => "font/woff", ".png" => "image/png", ".ico" => "image/x-icon", _ => "application/octet-stream"
         };
-        string headers = "Content-Type: " + type + "\r\nCache-Control: no-cache\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://cdn.discordapp.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'";
+        string cache = path.Equals("index.html", StringComparison.OrdinalIgnoreCase) ? "no-cache" : path.StartsWith("assets/", StringComparison.OrdinalIgnoreCase) ? "public, max-age=31536000, immutable" : "public, max-age=3600";
+        string headers = "Content-Type: " + type + "\r\nCache-Control: " + cache + "\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://cdn.discordapp.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'";
         e.Response = browser.CoreWebView2.Environment.CreateWebResourceResponse(stream, 200, "OK", headers);
     }
     private void Post(object value)

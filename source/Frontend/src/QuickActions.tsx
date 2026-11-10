@@ -34,6 +34,7 @@ export function QuickActions({ actions }: { actions: QuickAction[] }) {
   return <div className="quick-actions" data-testid="quick-actions">
     <div className="quick-search"><Search size={16} /><input
       data-autofocus
+      autoFocus
       role="combobox"
       aria-label="Buscar ação"
       aria-expanded="true"

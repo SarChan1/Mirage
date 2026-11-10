@@ -99,6 +99,8 @@ Object.assign(en, {
 Object.assign(es, {
   "Fix de perfil": "Corrección de perfil", "Fix de perfil e pasta de save": "Corrección de perfil y carpeta de partidas", "Use quando um jogo reinstalado não reconhecer o backup ou criar outro identificador. O Mirage primeiro confere se o save já funciona; a correção só é oferecida quando a pasta realmente mudou.": "Úsalo cuando un juego reinstalado no reconozca la copia o cree otro identificador. Mirage primero comprueba si la partida ya funciona; la corrección solo se ofrece cuando la carpeta realmente cambió.", "Se já funciona, não altera": "Si ya funciona, no cambia nada", "Se falta a pasta, aguarda": "Si falta la carpeta, espera", "Se o perfil mudou, corrige": "Si cambió el perfil, corrige", "Analisar backup": "Analizar copia"
 });
+Object.assign(en, { "Preparando…": "Preparing…", "Preparando Central de saves…": "Preparing Save Center…" });
+Object.assign(es, { "Preparando…": "Preparando…", "Preparando Central de saves…": "Preparando Centro de partidas…" });
 
 const catalogs: Record<Locale, Record<string, string>> = { "pt-BR": {}, en, es };
 const reverse = new Map<string, string>();
@@ -223,6 +225,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = locale;
     void request("locale", { locale }).catch(() => undefined);
     localize(document.body, locale);
+    // Portuguese is the source language, so newly rendered nodes already contain
+    // the correct text. Avoid observing every React update in the common case.
+    if (locale === "pt-BR") return;
     const observer = new MutationObserver(records => {
       for (const record of records) {
         if (record.type === "characterData" && record.target.parentNode) localize(record.target.parentNode, locale);

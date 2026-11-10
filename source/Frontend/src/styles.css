@@ -42,11 +42,14 @@ button {
   cursor: pointer;
   border: 0;
   user-select: none;
+  touch-action: manipulation;
 }
+button:not(:disabled):active { transform:translateY(1px) scale(.985); transition-duration:40ms; }
 button:disabled {
   cursor: not-allowed;
   opacity: 0.38;
 }
+.modal-loading { min-height:120px; display:flex; align-items:center; justify-content:center; gap:8px; color:#898894; font-size:11px; }
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,

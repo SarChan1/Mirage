@@ -1,9 +1,11 @@
 import {
   useCallback,
+  lazy,
   useMemo,
   useEffect,
   useRef,
   useState,
+  Suspense,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -47,16 +49,12 @@ import {
 } from "lucide-react";
 import { request, subscribe } from "./bridge";
 import { clock, duration, finishTime, validMinutes } from "./format.mjs";
-import { runSmoke, runRuntimeSmoke } from "./smoke";
 import "./sequences.css";
 import "./library.css";
 import { LibraryOptions, type DisplayAnchor } from "./LibraryOptions";
 import { SelectionInspector } from "./SelectionInspector";
-import { SaveFinderPanel } from "./SaveFinder";
-import { QuickActions, type QuickAction } from "./QuickActions";
-import { PreferencesPanel } from "./Preferences";
+import type { QuickAction } from "./QuickActions";
 import { localeOptions, useI18n, type Locale } from "./i18n";
-import { SaveCenter } from "./SaveCenter";
 import type {
   Game,
   NativeState,
@@ -66,6 +64,12 @@ import type {
   View,
   SortOrder,
 } from "./types";
+
+const SaveCenter = lazy(() => import("./SaveCenter").then(module => ({ default: module.SaveCenter })));
+const SaveFinderPanel = lazy(() => import("./SaveFinder").then(module => ({ default: module.SaveFinderPanel })));
+const QuickActions = lazy(() => import("./QuickActions").then(module => ({ default: module.QuickActions })));
+const PreferencesPanel = lazy(() => import("./Preferences").then(module => ({ default: module.PreferencesPanel })));
+const panelFallback = <div className="modal-loading"><LoaderCircle className="spin" size={18} /><span>Preparando…</span></div>;
 
 type Action = (
   command: string,
@@ -1079,12 +1083,20 @@ export default function App() {
     }
   }, [state?.preferences.minutes]);
   useEffect(() => {
-    window.__MIRAGE_READY__ = ready;
+    let active = true;
     if (state?.preview) {
-      window.__MIRAGE_SMOKE__ = runSmoke;
-      window.__MIRAGE_RUNTIME_SMOKE__ = runRuntimeSmoke;
+      window.__MIRAGE_READY__ = false;
+      void import("./smoke").then(module => {
+        if (!active) return;
+        window.__MIRAGE_SMOKE__ = module.runSmoke;
+        window.__MIRAGE_RUNTIME_SMOKE__ = module.runRuntimeSmoke;
+        window.__MIRAGE_READY__ = ready;
+      });
+    } else {
+      window.__MIRAGE_READY__ = ready;
     }
     return () => {
+      active = false;
       window.__MIRAGE_READY__ = false;
     };
   }, [ready, state?.preview]);
@@ -1178,7 +1190,7 @@ export default function App() {
             if (generation === searchGeneration.current) setLoading(false);
           });
       },
-      query ? 140 : 0,
+      query ? 90 : 0,
     );
     return () => {
       clearTimeout(timer);
@@ -1724,7 +1736,9 @@ export default function App() {
               )}
             </div>
           ) : view === "saves" ? (
-            <SaveCenter preview={state.preview} onInspect={async gameId => { await act("select", { gameId }); setModal("saves"); }} />
+            <Suspense fallback={<div className="empty-state"><LoaderCircle className="spin" size={22} /><p>Preparando Central de saves…</p></div>}>
+              <SaveCenter preview={state.preview} onInspect={async gameId => { await act("select", { gameId }); setModal("saves"); }} />
+            </Suspense>
           ) : (
             <>
               <div className="search-box">
@@ -2136,14 +2150,14 @@ export default function App() {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {modal === "commands" && <Modal key="commands" title="Ações rápidas" onClose={() => setModal(null)}><QuickActions actions={quickActions} /></Modal>}
-        {modal === "preferences" && <Modal key="preferences" title="Configurações" error={dialogError} onClose={() => setModal(null)}><PreferencesPanel preferences={state.preferences} storageWarning={state.storage.warning} onChange={async values => Boolean(await act("configure", values))} /></Modal>}
+        {modal === "commands" && <Modal key="commands" title="Ações rápidas" onClose={() => setModal(null)}><Suspense fallback={panelFallback}><QuickActions actions={quickActions} /></Suspense></Modal>}
+        {modal === "preferences" && <Modal key="preferences" title="Configurações" error={dialogError} onClose={() => setModal(null)}><Suspense fallback={panelFallback}><PreferencesPanel preferences={state.preferences} storageWarning={state.storage.warning} onChange={async values => Boolean(await act("configure", values))} /></Suspense></Modal>}
         {modal === "replaceStorage" && <Modal key="replaceStorage" title="Recuperar o salvamento" error={dialogError} onClose={() => setModal(null)}>
           <p className="modal-intro">O arquivo de preferências não pôde ser lido. Para tentar recuperá-lo manualmente, feche o Mirage e confira preferences.json em %LOCALAPPDATA%\Mirage.</p>
           <p className="modal-intro">Você também pode substituí-lo pelas configurações e sequências desta sessão. Os dados antigos que não puderam ser lidos serão perdidos.</p>
           <div className="modal-actions"><button className="button secondary" onClick={() => setModal(null)}>Manter arquivo original</button><button className="button primary" disabled={locked} onClick={async () => { const result = await act("replaceUnreadablePreferences"); if (result && !result.storage.warning) setModal(null); else if (result) setDialogError(result.storage.warning ?? "Não foi possível salvar."); }}>Substituir pelo estado atual</button></div>
         </Modal>}
-        {modal === "saves" && state.selected && <Modal key="saves" title="Localizar saves" onClose={() => setModal(null)}><SaveFinderPanel game={state.selected} /></Modal>}
+        {modal === "saves" && state.selected && <Modal key="saves" title="Localizar saves" onClose={() => setModal(null)}><Suspense fallback={panelFallback}><SaveFinderPanel game={state.selected} /></Suspense></Modal>}
         {modal === "batchReview" && (
           <Modal
             key="batchReview"
