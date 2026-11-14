@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Conferir versão da tag
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
@@ -18,13 +18,13 @@ jobs:
           [xml]$project = Get-Content source/Mirage.csproj
           $version = [string]$project.Project.PropertyGroup.Version
           if ($env:GITHUB_REF_NAME -ne "v$version") { throw "A tag deve corresponder à versão do projeto: v$version" }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Testar geração do catálogo de saves

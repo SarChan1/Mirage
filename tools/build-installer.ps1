@@ -20,19 +20,14 @@ if (!(Test-Path -LiteralPath (Join-Path $PublishDir 'Mirage.exe'))) { throw 'Exe
 $version = (Get-Item -LiteralPath (Join-Path $PublishDir 'Mirage.exe')).VersionInfo.ProductVersion.Split('+')[0]
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Versão do aplicativo inválida.' }
 if (!$CompilerPath) {
-    $installed = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-    if ($installed) { $CompilerPath = $installed.Source }
-    elseif (Test-Path -LiteralPath "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") { $CompilerPath = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-    else {
-        $portableRoot = Join-Path $projectRoot 'work\toolchains\inno-portable'
-        $CompilerPath = Join-Path $portableRoot 'package\bin\ISCC.exe'
-        if (!(Test-Path -LiteralPath $CompilerPath)) {
-            New-Item -ItemType Directory -Path $portableRoot -Force | Out-Null
-            npm pack innosetup@6.4.1 --ignore-scripts --prefer-offline --fetch-retries=1 --fetch-timeout=20000 --pack-destination $portableRoot --silent
-            if ($LASTEXITCODE -ne 0) { throw 'Não foi possível obter o compilador portátil.' }
-            tar -xf (Join-Path $portableRoot 'innosetup-6.4.1.tgz') -C $portableRoot
-            if ($LASTEXITCODE -ne 0) { throw 'Não foi possível extrair o compilador portátil.' }
-        }
+    $portableRoot = Join-Path $projectRoot 'work\toolchains\inno-portable'
+    $CompilerPath = Join-Path $portableRoot 'package\bin\ISCC.exe'
+    if (!(Test-Path -LiteralPath $CompilerPath)) {
+        New-Item -ItemType Directory -Path $portableRoot -Force | Out-Null
+        npm pack innosetup@6.4.1 --ignore-scripts --prefer-offline --fetch-retries=1 --fetch-timeout=20000 --pack-destination $portableRoot --silent
+        if ($LASTEXITCODE -ne 0) { throw 'Não foi possível obter o compilador portátil.' }
+        tar -xf (Join-Path $portableRoot 'innosetup-6.4.1.tgz') -C $portableRoot
+        if ($LASTEXITCODE -ne 0) { throw 'Não foi possível extrair o compilador portátil.' }
     }
 }
 $signature = Get-AuthenticodeSignature -LiteralPath $CompilerPath
